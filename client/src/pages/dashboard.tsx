@@ -7,9 +7,10 @@ import DeviceStatus from "@/components/dashboard/device-status";
 import VoterRegistrationCard from "@/components/dashboard/voter-registration-card";
 import SecurityAlerts from "@/components/dashboard/security-alerts";
 import { SecurityLog } from "@shared/schema";
+import { DashboardStats } from "@/types";
 
 export default function Dashboard() {
-  const { data: stats } = useQuery({
+  const { data: stats } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
     refetchInterval: 5000, // Refetch every 5 seconds for live updates
   });

@@ -61,14 +61,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/esp32/vote", async (req, res) => {
     try {
       const voteData = insertVoteSchema.parse(req.body);
-      
+
       // Check if voter exists and hasn't voted
       const voter = await storage.getVoterByVoterId(voteData.voterId);
       if (!voter) {
         await storage.createSecurityLog({
           type: "unregistered_fingerprint",
           severity: "medium",
-          deviceId: voteData.deviceId,
+          deviceId: voteData.deviceId || undefined,
           voterId: voteData.voterId,
           description: `Unregistered voter ID ${voteData.voterId} attempted to vote`
         });
@@ -79,7 +79,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.createSecurityLog({
           type: "duplicate_attempt",
           severity: "high",
-          deviceId: voteData.deviceId,
+          deviceId: voteData.deviceId || undefined,
           voterId: voteData.voterId,
           description: `Duplicate vote attempt by voter ${voteData.voterId}`
         });
@@ -91,21 +91,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.createSecurityLog({
           type: "unregistered_fingerprint",
           severity: "high",
-          deviceId: voteData.deviceId,
+          deviceId: voteData.deviceId || undefined,
           voterId: voteData.voterId,
           description: `Fingerprint mismatch for voter ${voteData.voterId}`
         });
         return res.status(400).json({ message: "Fingerprint verification failed" });
       }
 
-      // Create vote
-      const vote = await storage.createVote(voteData);
-      
+      const device = voteData.deviceId ? await storage.getDevice(voteData.deviceId) : undefined;
+
+      // Create vote with normalized device identifier when available
+      const vote = await storage.createVote({
+        ...voteData,
+        deviceId: device?.id ?? voteData.deviceId ?? undefined,
+      });
+
       // Update voter status
       await storage.updateVoterVoteStatus(voteData.voterId, true);
 
-      // Update device sync
-      if (voteData.deviceId) {
+      // Update device sync using physical device identifier when available
+      if (device) {
+        await storage.updateDeviceSync(device.deviceId);
+      } else if (voteData.deviceId) {
         await storage.updateDeviceSync(voteData.deviceId);
       }
 
@@ -113,13 +120,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.createActivityLog({
         type: "vote_cast",
         description: `Vote cast by voter ${voteData.voterId.slice(0, 3)}***`,
-        deviceId: voteData.deviceId,
-        metadata: { maskedVoterId: voteData.voterId.slice(0, 3) + "***" }
+        deviceId: device?.id,
+        metadata: {
+          maskedVoterId: voteData.voterId.slice(0, 3) + "***",
+          deviceIdentifier: device?.deviceId ?? voteData.deviceId ?? null,
+        }
       });
 
       res.json({ success: true, voteId: vote.id });
     } catch (error) {
       res.status(500).json({ message: "Failed to submit vote" });
+    }
+  });
+
+  app.get("/api/votes/logs", async (req, res) => {
+    try {
+      const limitParam = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
+      const limit = Number.isNaN(limitParam) ? 100 : limitParam;
+
+      const [votes, candidates, devices] = await Promise.all([
+        storage.getVotes(),
+        storage.getCandidates(),
+        storage.getDevices(),
+      ]);
+
+      const candidateMap = new Map(candidates.map(candidate => [candidate.id, candidate]));
+      const deviceIdMap = new Map(devices.map(device => [device.id, device]));
+      const deviceIdentifierMap = new Map(devices.map(device => [device.deviceId, device]));
+
+      const sortedVotes = votes
+        .slice()
+        .sort((a, b) => new Date(b.timestamp ?? 0).getTime() - new Date(a.timestamp ?? 0).getTime())
+        .slice(0, limit);
+
+      const formatted = sortedVotes.map((vote) => {
+        const candidate = vote.candidateId ? candidateMap.get(vote.candidateId) : undefined;
+        const device = vote.deviceId
+          ? deviceIdMap.get(vote.deviceId) ?? deviceIdentifierMap.get(vote.deviceId)
+          : undefined;
+
+        return {
+          id: vote.id,
+          voterId: vote.voterId,
+          maskedVoterId: `${vote.voterId.slice(0, 3)}***`,
+          candidateId: vote.candidateId,
+          candidateName: candidate?.name ?? "Unknown Candidate",
+          candidateParty: candidate?.party ?? null,
+          deviceId: device?.deviceId ?? vote.deviceId ?? null,
+          deviceName: device?.name ?? null,
+          deviceLocation: device?.location ?? null,
+          timestamp: vote.timestamp ? new Date(vote.timestamp).toISOString() : new Date().toISOString(),
+          verified: vote.verified ?? false,
+        };
+      });
+
+      res.json(formatted);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch vote logs" });
     }
   });
 
@@ -208,7 +265,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { deviceId } = req.params;
       await storage.updateDeviceSync(deviceId);
-      
+
       await storage.createActivityLog({
         type: "device_sync",
         description: `Device ${deviceId} manually synchronized`,
@@ -218,6 +275,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to sync device" });
+    }
+  });
+
+  app.post("/api/devices/:deviceId/test-vote", async (req, res) => {
+    try {
+      const { deviceId } = req.params;
+      const { candidateId } = req.body ?? {};
+
+      const device = await storage.getDevice(deviceId);
+      if (!device) {
+        return res.status(404).json({ message: "Device not found" });
+      }
+
+      const voters = await storage.getVoters();
+      const availableVoter = voters.find(voter => !voter.hasVoted);
+      if (!availableVoter) {
+        return res.status(400).json({ message: "No pending voters available for test vote" });
+      }
+
+      const candidates = await storage.getCandidates();
+      if (candidates.length === 0) {
+        return res.status(400).json({ message: "No candidates configured" });
+      }
+
+      const selectedCandidate = candidateId
+        ? candidates.find(candidate => candidate.id === candidateId) ?? candidates[0]
+        : candidates[0];
+
+      const votePayload = insertVoteSchema.parse({
+        voterId: availableVoter.voterId,
+        candidateId: selectedCandidate.id,
+        fingerprintHash: availableVoter.fingerprintHash,
+        deviceId: device.id ?? device.deviceId,
+      });
+
+      const vote = await storage.createVote(votePayload);
+
+      await storage.updateVoterVoteStatus(availableVoter.voterId, true);
+      await storage.updateDeviceSync(device.deviceId);
+
+      await storage.createActivityLog({
+        type: "vote_cast",
+        description: `Test vote cast for ${selectedCandidate.name} from device ${device.deviceId}`,
+        deviceId: device.id,
+        metadata: {
+          maskedVoterId: availableVoter.voterId.slice(0, 3) + "***",
+          testVote: true,
+          deviceIdentifier: device.deviceId,
+          candidateName: selectedCandidate.name,
+        }
+      });
+
+      res.json({
+        success: true,
+        voteId: vote.id,
+        voterId: availableVoter.voterId,
+        candidateId: selectedCandidate.id,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to submit test vote" });
     }
   });
 
