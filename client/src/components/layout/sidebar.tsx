@@ -72,7 +72,9 @@ export default function Sidebar() {
             <VoteIcon className="text-primary-foreground text-sm" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-foreground">SecureVote</h1>
+            <h1 className="text-lg font-semibold text-foreground">
+              SecureVote
+            </h1>
             <p className="text-xs text-muted-foreground">Admin Dashboard</p>
           </div>
         </div>
@@ -87,16 +89,14 @@ export default function Sidebar() {
               {getRoleDisplay(user?.role || "")}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            {user?.fullName}
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{user?.fullName}</p>
         </div>
       </div>
 
       <nav className="px-4 space-y-1">
         {navigation.map((item) => {
           if (!hasPermission(item.permission)) return null;
-          
+
           const isActive = location === item.href;
           const Icon = item.icon;
 
@@ -108,7 +108,9 @@ export default function Sidebar() {
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 }`}
-                data-testid={`nav-${item.name.toLowerCase().replace(/\s+/g, '-')}`}
+                data-testid={`nav-${item.name
+                  .toLowerCase()
+                  .replace(/\s+/g, "-")}`}
               >
                 <Icon className="w-5 h-5" />
                 <span className="font-medium">{item.name}</span>
@@ -123,9 +125,13 @@ export default function Sidebar() {
         <div className="bg-green-50 border border-green-200 rounded-lg p-3">
           <div className="flex items-center space-x-2">
             <Shield className="text-green-600 w-4 h-4" />
-            <span className="text-sm font-medium text-green-800">System Secure</span>
+            <span className="text-sm font-medium text-green-800">
+              System Secure
+            </span>
           </div>
-          <p className="text-xs text-green-600 mt-1">All devices synchronized</p>
+          <p className="text-xs text-green-600 mt-1">
+            All devices synchronized
+          </p>
         </div>
       </div>
 
