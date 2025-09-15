@@ -65,7 +65,7 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-64 bg-card shadow-lg border-r border-border">
+    <aside className="relative flex h-full w-64 flex-col bg-card shadow-lg border-r border-border">
       <div className="p-6">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
@@ -93,7 +93,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="px-4 space-y-1">
+      <nav className="flex-1 px-4 space-y-1">
         {navigation.map((item) => {
           if (!hasPermission(item.permission)) return null;
 
@@ -120,8 +120,8 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Security Status */}
-      <div className="absolute bottom-16 left-4 right-4">
+      <div className="mt-auto space-y-4 px-4 pb-6">
+        {/* Security Status */}
         <div className="bg-green-50 border border-green-200 rounded-lg p-3">
           <div className="flex items-center space-x-2">
             <Shield className="text-green-600 w-4 h-4" />
@@ -133,10 +133,8 @@ export default function Sidebar() {
             All devices synchronized
           </p>
         </div>
-      </div>
 
-      {/* Logout Button */}
-      <div className="absolute bottom-4 left-4 right-4">
+        {/* Logout Button */}
         <Button
           variant="ghost"
           className="w-full justify-start text-muted-foreground hover:text-foreground"
