@@ -4,14 +4,14 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
-import NotFound from "@/pages/not-found";
-import Login from "@/pages/login";
-import Dashboard from "@/pages/dashboard";
-import Voters from "@/pages/voters";
-import Monitoring from "@/pages/monitoring";
-import Devices from "@/pages/devices";
-import Reports from "@/pages/reports";
-import Security from "@/pages/security";
+import NotFound from "./pages/not-found";
+import Login from "./pages/login";
+import Dashboard from "./pages/dashboard";
+import Voters from "./pages/voters";
+import Monitoring from "./pages/monitoring";
+import Devices from "./pages/devices";
+import Reports from "./pages/reports";
+import Security from "./pages/security";
 import Sidebar from "@/components/layout/sidebar";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {

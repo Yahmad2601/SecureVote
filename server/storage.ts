@@ -5,6 +5,7 @@ import {
   type ActivityLog, type InsertActivityLog
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { PostgreSQLStorage } from "./postgres-storage";
 
 export interface IStorage {
   // User methods
@@ -99,6 +100,7 @@ export class MemStorage implements IStorage {
     const user: User = { 
       ...insertUser, 
       id,
+      role: insertUser.role || "observer",
       createdAt: new Date()
     };
     this.users.set(id, user);
@@ -174,6 +176,8 @@ export class MemStorage implements IStorage {
     const device: Device = {
       ...insertDevice,
       id,
+      status: insertDevice.status || "offline",
+      batteryLevel: insertDevice.batteryLevel ?? 0,
       lastSync: new Date()
     };
     this.devices.set(id, device);
@@ -208,6 +212,8 @@ export class MemStorage implements IStorage {
     const vote: Vote = {
       ...insertVote,
       id,
+      deviceId: insertVote.deviceId || null,
+      candidateId: insertVote.candidateId || null,
       timestamp: new Date(),
       verified: true
     };
@@ -246,6 +252,10 @@ export class MemStorage implements IStorage {
     const log: SecurityLog = {
       ...insertLog,
       id,
+      metadata: insertLog.metadata || null,
+      severity: insertLog.severity || "medium",
+      deviceId: insertLog.deviceId || null,
+      voterId: insertLog.voterId || null,
       timestamp: new Date(),
       resolved: false
     };
@@ -272,6 +282,9 @@ export class MemStorage implements IStorage {
     const log: ActivityLog = {
       ...insertLog,
       id,
+      metadata: insertLog.metadata || null,
+      deviceId: insertLog.deviceId || null,
+      userId: insertLog.userId || null,
       timestamp: new Date()
     };
     this.activityLogs.set(id, log);
@@ -305,4 +318,43 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// Create PostgreSQL storage instance
+const pgStorage = new PostgreSQLStorage();
+
+// Initialize the database with default data
+async function initializeDatabase() {
+  try {
+    // Check if admin user exists
+    const existingAdmin = await pgStorage.getUserByUsername("admin");
+    if (!existingAdmin) {
+      // Create default admin user
+      await pgStorage.createUser({
+        username: "admin",
+        password: "admin123", // In production, this should be hashed
+        role: "super_admin",
+        fullName: "System Administrator"
+      });
+
+      // Create sample candidates
+      await pgStorage.createCandidate({ name: "Candidate Alpha", party: "Democratic Party", position: 1 });
+      await pgStorage.createCandidate({ name: "Candidate Beta", party: "Republican Party", position: 2 });
+      await pgStorage.createCandidate({ name: "Candidate Gamma", party: "Independent", position: 3 });
+
+      // Create sample devices
+      await pgStorage.createDevice({ deviceId: "machine_01", name: "Device-01", status: "online", batteryLevel: 87, location: "Building A" });
+      await pgStorage.createDevice({ deviceId: "machine_02", name: "Device-02", status: "online", batteryLevel: 92, location: "Building B" });
+      await pgStorage.createDevice({ deviceId: "machine_03", name: "Device-03", status: "warning", batteryLevel: 15, location: "Building C" });
+      await pgStorage.createDevice({ deviceId: "machine_04", name: "Device-04", status: "offline", batteryLevel: 0, location: "Building D" });
+      await pgStorage.createDevice({ deviceId: "machine_05", name: "Device-05", status: "online", batteryLevel: 76, location: "Building E" });
+
+      console.log("Database initialized with default data");
+    }
+  } catch (error) {
+    console.error("Error initializing database:", error);
+  }
+}
+
+// Initialize database on startup
+initializeDatabase();
+
+export const storage = pgStorage;
