@@ -18,7 +18,7 @@ export default function Dashboard() {
     queryKey: ["/api/security-logs"],
   });
 
-  const activeAlerts = securityLogs.filter(log => !log.resolved).length;
+  const activeAlerts = securityLogs.filter((log) => !log.resolved).length;
 
   const handleExport = () => {
     console.log("Export report");
@@ -37,15 +37,15 @@ export default function Dashboard() {
     <>
       <Header
         title="Election Dashboard"
-        subtitle="Presidential Election 2024 - Live Monitoring"
+        subtitle="Presidential Election 2027 - Live Monitoring"
         showExportButton={true}
         onExport={handleExport}
         alertCount={activeAlerts}
       />
-      
+
       <div className="p-6 space-y-6">
         <OverviewStats stats={stats || defaultStats} />
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <LiveResults />
           <RecentActivity />
