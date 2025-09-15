@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,9 +49,7 @@ export default function Login() {
             <VoteIcon className="w-6 h-6 text-primary-foreground" />
           </div>
           <CardTitle className="text-2xl font-semibold">SecureVote</CardTitle>
-          <CardDescription>
-            Biometric Voting System Dashboard
-          </CardDescription>
+          <CardDescription>Biometric Voting System Dashboard</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -93,9 +97,11 @@ export default function Login() {
             </Button>
           </form>
           <div className="mt-6 p-4 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground font-medium mb-2">Demo Credentials:</p>
+            <p className="text-sm text-muted-foreground font-medium mb-2">
+              Demo Credentials:
+            </p>
             <p className="text-xs text-muted-foreground">Username: admin</p>
-            <p className="text-xs text-muted-foreground">Password: admin123</p>
+            <p className="text-xs text-muted-foreground">Password: Vulegbo</p>
           </div>
         </CardContent>
       </Card>

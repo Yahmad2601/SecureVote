@@ -1,8 +1,18 @@
-import { 
-  type User, type InsertUser, type Voter, type InsertVoter, 
-  type Candidate, type InsertCandidate, type Device, type InsertDevice,
-  type Vote, type InsertVote, type SecurityLog, type InsertSecurityLog,
-  type ActivityLog, type InsertActivityLog
+import {
+  type User,
+  type InsertUser,
+  type Voter,
+  type InsertVoter,
+  type Candidate,
+  type InsertCandidate,
+  type Device,
+  type InsertDevice,
+  type Vote,
+  type InsertVote,
+  type SecurityLog,
+  type InsertSecurityLog,
+  type ActivityLog,
+  type InsertActivityLog,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { PostgreSQLStorage } from "./postgres-storage";
@@ -29,13 +39,19 @@ export interface IStorage {
   getDevices(): Promise<Device[]>;
   getDevice(deviceId: string): Promise<Device | undefined>;
   createDevice(device: InsertDevice): Promise<Device>;
-  updateDeviceStatus(deviceId: string, status: string, batteryLevel?: number): Promise<void>;
+  updateDeviceStatus(
+    deviceId: string,
+    status: string,
+    batteryLevel?: number
+  ): Promise<void>;
   updateDeviceSync(deviceId: string): Promise<void>;
 
   // Vote methods
   getVotes(): Promise<Vote[]>;
   createVote(vote: InsertVote): Promise<Vote>;
-  getVotesByCandidate(): Promise<{ candidateId: string; count: number; candidate: Candidate }[]>;
+  getVotesByCandidate(): Promise<
+    { candidateId: string; count: number; candidate: Candidate }[]
+  >;
 
   // Security log methods
   getSecurityLogs(): Promise<SecurityLog[]>;
@@ -69,22 +85,64 @@ export class MemStorage implements IStorage {
     // Initialize with default admin user
     this.createUser({
       username: "admin",
-      password: "admin123", // In production, this should be hashed
+      password: "Vulegbo", // In production, this should be hashed
       role: "super_admin",
-      fullName: "System Administrator"
+      fullName: "System Administrator",
     });
 
     // Initialize with sample candidates
-    this.createCandidate({ name: "Candidate Alpha", party: "Democratic Party", position: 1 });
-    this.createCandidate({ name: "Candidate Beta", party: "Republican Party", position: 2 });
-    this.createCandidate({ name: "Candidate Gamma", party: "Independent", position: 3 });
+    this.createCandidate({
+      name: "Candidate Alpha",
+      party: "Democratic Party",
+      position: 1,
+    });
+    this.createCandidate({
+      name: "Candidate Beta",
+      party: "Republican Party",
+      position: 2,
+    });
+    this.createCandidate({
+      name: "Candidate Gamma",
+      party: "Independent",
+      position: 3,
+    });
 
     // Initialize with sample devices
-    this.createDevice({ deviceId: "machine_01", name: "Device-01", status: "online", batteryLevel: 87, location: "Building A" });
-    this.createDevice({ deviceId: "machine_02", name: "Device-02", status: "online", batteryLevel: 92, location: "Building B" });
-    this.createDevice({ deviceId: "machine_03", name: "Device-03", status: "warning", batteryLevel: 15, location: "Building C" });
-    this.createDevice({ deviceId: "machine_04", name: "Device-04", status: "offline", batteryLevel: 0, location: "Building D" });
-    this.createDevice({ deviceId: "machine_05", name: "Device-05", status: "online", batteryLevel: 76, location: "Building E" });
+    this.createDevice({
+      deviceId: "machine_01",
+      name: "Device-01",
+      status: "online",
+      batteryLevel: 87,
+      location: "Building A",
+    });
+    this.createDevice({
+      deviceId: "machine_02",
+      name: "Device-02",
+      status: "online",
+      batteryLevel: 92,
+      location: "Building B",
+    });
+    this.createDevice({
+      deviceId: "machine_03",
+      name: "Device-03",
+      status: "warning",
+      batteryLevel: 15,
+      location: "Building C",
+    });
+    this.createDevice({
+      deviceId: "machine_04",
+      name: "Device-04",
+      status: "offline",
+      batteryLevel: 0,
+      location: "Building D",
+    });
+    this.createDevice({
+      deviceId: "machine_05",
+      name: "Device-05",
+      status: "online",
+      batteryLevel: 76,
+      location: "Building E",
+    });
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -92,16 +150,18 @@ export class MemStorage implements IStorage {
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(user => user.username === username);
+    return Array.from(this.users.values()).find(
+      (user) => user.username === username
+    );
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { 
-      ...insertUser, 
+    const user: User = {
+      ...insertUser,
       id,
       role: insertUser.role || "observer",
-      createdAt: new Date()
+      createdAt: new Date(),
     };
     this.users.set(id, user);
     return user;
@@ -116,7 +176,9 @@ export class MemStorage implements IStorage {
   }
 
   async getVoterByVoterId(voterId: string): Promise<Voter | undefined> {
-    return Array.from(this.voters.values()).find(voter => voter.voterId === voterId);
+    return Array.from(this.voters.values()).find(
+      (voter) => voter.voterId === voterId
+    );
   }
 
   async createVoter(insertVoter: InsertVoter): Promise<Voter> {
@@ -125,7 +187,7 @@ export class MemStorage implements IStorage {
       ...insertVoter,
       id,
       hasVoted: false,
-      createdAt: new Date()
+      createdAt: new Date(),
     };
     this.voters.set(id, voter);
     return voter;
@@ -140,7 +202,10 @@ export class MemStorage implements IStorage {
     return voters;
   }
 
-  async updateVoterVoteStatus(voterId: string, hasVoted: boolean): Promise<void> {
+  async updateVoterVoteStatus(
+    voterId: string,
+    hasVoted: boolean
+  ): Promise<void> {
     const voter = await this.getVoterByVoterId(voterId);
     if (voter) {
       voter.hasVoted = hasVoted;
@@ -149,7 +214,9 @@ export class MemStorage implements IStorage {
   }
 
   async getCandidates(): Promise<Candidate[]> {
-    return Array.from(this.candidates.values()).sort((a, b) => a.position - b.position);
+    return Array.from(this.candidates.values()).sort(
+      (a, b) => a.position - b.position
+    );
   }
 
   async createCandidate(insertCandidate: InsertCandidate): Promise<Candidate> {
@@ -157,7 +224,7 @@ export class MemStorage implements IStorage {
     const candidate: Candidate = {
       ...insertCandidate,
       id,
-      active: true
+      active: true,
     };
     this.candidates.set(id, candidate);
     return candidate;
@@ -168,7 +235,9 @@ export class MemStorage implements IStorage {
   }
 
   async getDevice(deviceId: string): Promise<Device | undefined> {
-    return Array.from(this.devices.values()).find(device => device.deviceId === deviceId);
+    return Array.from(this.devices.values()).find(
+      (device) => device.deviceId === deviceId
+    );
   }
 
   async createDevice(insertDevice: InsertDevice): Promise<Device> {
@@ -187,7 +256,11 @@ export class MemStorage implements IStorage {
     return device;
   }
 
-  async updateDeviceStatus(deviceId: string, status: string, batteryLevel?: number): Promise<void> {
+  async updateDeviceStatus(
+    deviceId: string,
+    status: string,
+    batteryLevel?: number
+  ): Promise<void> {
     const device = await this.getDevice(deviceId);
     if (device) {
       device.status = status;
@@ -218,35 +291,41 @@ export class MemStorage implements IStorage {
       deviceId: insertVote.deviceId || null,
       candidateId: insertVote.candidateId || null,
       timestamp: new Date(),
-      verified: true
+      verified: true,
     };
     this.votes.set(id, vote);
     return vote;
   }
 
-  async getVotesByCandidate(): Promise<{ candidateId: string; count: number; candidate: Candidate }[]> {
+  async getVotesByCandidate(): Promise<
+    { candidateId: string; count: number; candidate: Candidate }[]
+  > {
     const votes = Array.from(this.votes.values());
     const candidates = await this.getCandidates();
-    const candidateMap = new Map(candidates.map(c => [c.id, c]));
-    
+    const candidateMap = new Map(candidates.map((c) => [c.id, c]));
+
     const voteCounts = new Map<string, number>();
-    
-    votes.forEach(vote => {
+
+    votes.forEach((vote) => {
       if (vote.candidateId) {
-        voteCounts.set(vote.candidateId, (voteCounts.get(vote.candidateId) || 0) + 1);
+        voteCounts.set(
+          vote.candidateId,
+          (voteCounts.get(vote.candidateId) || 0) + 1
+        );
       }
     });
 
     return Array.from(voteCounts.entries()).map(([candidateId, count]) => ({
       candidateId,
       count,
-      candidate: candidateMap.get(candidateId)!
+      candidate: candidateMap.get(candidateId)!,
     }));
   }
 
   async getSecurityLogs(): Promise<SecurityLog[]> {
-    return Array.from(this.securityLogs.values()).sort((a, b) => 
-      new Date(b.timestamp!).getTime() - new Date(a.timestamp!).getTime()
+    return Array.from(this.securityLogs.values()).sort(
+      (a, b) =>
+        new Date(b.timestamp!).getTime() - new Date(a.timestamp!).getTime()
     );
   }
 
@@ -260,7 +339,7 @@ export class MemStorage implements IStorage {
       deviceId: insertLog.deviceId || null,
       voterId: insertLog.voterId || null,
       timestamp: new Date(),
-      resolved: false
+      resolved: false,
     };
     this.securityLogs.set(id, log);
     return log;
@@ -276,7 +355,10 @@ export class MemStorage implements IStorage {
 
   async getActivityLogs(limit: number = 50): Promise<ActivityLog[]> {
     return Array.from(this.activityLogs.values())
-      .sort((a, b) => new Date(b.timestamp!).getTime() - new Date(a.timestamp!).getTime())
+      .sort(
+        (a, b) =>
+          new Date(b.timestamp!).getTime() - new Date(a.timestamp!).getTime()
+      )
       .slice(0, limit);
   }
 
@@ -288,7 +370,7 @@ export class MemStorage implements IStorage {
       metadata: insertLog.metadata || null,
       deviceId: insertLog.deviceId || null,
       userId: insertLog.userId || null,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
     this.activityLogs.set(id, log);
     return log;
@@ -304,11 +386,12 @@ export class MemStorage implements IStorage {
     const voters = await this.getVoters();
     const votes = await this.getVotes();
     const devices = await this.getDevices();
-    
+
     const registeredVoters = voters.length;
     const votesCast = votes.length;
-    const turnoutRate = registeredVoters > 0 ? (votesCast / registeredVoters) * 100 : 0;
-    const activeDevices = devices.filter(d => d.status === "online").length;
+    const turnoutRate =
+      registeredVoters > 0 ? (votesCast / registeredVoters) * 100 : 0;
+    const activeDevices = devices.filter((d) => d.status === "online").length;
     const totalDevices = devices.length;
 
     return {
@@ -316,7 +399,7 @@ export class MemStorage implements IStorage {
       votesCast,
       turnoutRate,
       activeDevices,
-      totalDevices
+      totalDevices,
     };
   }
 }
@@ -333,22 +416,64 @@ async function initializeDatabase() {
       // Create default admin user
       await pgStorage.createUser({
         username: "admin",
-        password: "admin123", // In production, this should be hashed
+        password: "Vulegbo", // In production, this should be hashed
         role: "super_admin",
-        fullName: "System Administrator"
+        fullName: "System Administrator",
       });
 
       // Create sample candidates
-      await pgStorage.createCandidate({ name: "Candidate Alpha", party: "Democratic Party", position: 1 });
-      await pgStorage.createCandidate({ name: "Candidate Beta", party: "Republican Party", position: 2 });
-      await pgStorage.createCandidate({ name: "Candidate Gamma", party: "Independent", position: 3 });
+      await pgStorage.createCandidate({
+        name: "Candidate Alpha",
+        party: "Democratic Party",
+        position: 1,
+      });
+      await pgStorage.createCandidate({
+        name: "Candidate Beta",
+        party: "Republican Party",
+        position: 2,
+      });
+      await pgStorage.createCandidate({
+        name: "Candidate Gamma",
+        party: "Independent",
+        position: 3,
+      });
 
       // Create sample devices
-      await pgStorage.createDevice({ deviceId: "machine_01", name: "Device-01", status: "online", batteryLevel: 87, location: "Building A" });
-      await pgStorage.createDevice({ deviceId: "machine_02", name: "Device-02", status: "online", batteryLevel: 92, location: "Building B" });
-      await pgStorage.createDevice({ deviceId: "machine_03", name: "Device-03", status: "warning", batteryLevel: 15, location: "Building C" });
-      await pgStorage.createDevice({ deviceId: "machine_04", name: "Device-04", status: "offline", batteryLevel: 0, location: "Building D" });
-      await pgStorage.createDevice({ deviceId: "machine_05", name: "Device-05", status: "online", batteryLevel: 76, location: "Building E" });
+      await pgStorage.createDevice({
+        deviceId: "machine_01",
+        name: "Device-01",
+        status: "online",
+        batteryLevel: 87,
+        location: "Building A",
+      });
+      await pgStorage.createDevice({
+        deviceId: "machine_02",
+        name: "Device-02",
+        status: "online",
+        batteryLevel: 92,
+        location: "Building B",
+      });
+      await pgStorage.createDevice({
+        deviceId: "machine_03",
+        name: "Device-03",
+        status: "warning",
+        batteryLevel: 15,
+        location: "Building C",
+      });
+      await pgStorage.createDevice({
+        deviceId: "machine_04",
+        name: "Device-04",
+        status: "offline",
+        batteryLevel: 0,
+        location: "Building D",
+      });
+      await pgStorage.createDevice({
+        deviceId: "machine_05",
+        name: "Device-05",
+        status: "online",
+        batteryLevel: 76,
+        location: "Building E",
+      });
 
       console.log("Database initialized with default data");
     }
