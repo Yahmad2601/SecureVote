@@ -1,0 +1,84 @@
+{
+  "project": "Biometric Voting IoT Web Application",
+  "description": "A secure web application for managing and monitoring an IoT-enabled biometric voting system built with ESP32 + fingerprint sensor. The web app will handle voter registration, real-time vote tallying, device management, and election reporting. Supabase will be used for database, authentication, and storage. The app will be deployed to Vercel.",
+  "tech_stack": {
+    "frontend": {
+      "framework": "Next.js (React-based, optimized for Vercel)",
+      "styling": ["TailwindCSS", "shadcn/ui"],
+      "charts": "Recharts or Chart.js",
+      "authentication": "Supabase Auth with JWT"
+    },
+    "backend": {
+      "framework": "Next.js API Routes",
+      "database": "Supabase (PostgreSQL)",
+      "authentication": "Supabase Auth (role-based access)",
+      "security": ["HTTPS/TLS via Vercel", "Supabase RLS (Row Level Security)", "input validation"]
+    },
+    "communication": {
+      "protocols": ["HTTPS REST API", "optional MQTT broker for real-time updates"],
+      "data_format": "JSON"
+    },
+    "deployment": {
+      "frontend_backend_hosting": "Vercel",
+      "database_hosting": "Supabase Cloud",
+      "ci_cd": "Vercel auto-deploy from GitHub"
+    }
+  },
+  "features": {
+    "admin_dashboard": {
+      "overview": "Display total registered voters, votes cast, turnout percentage",
+      "live_results": "Real-time tally of votes per candidate with charts",
+      "logs": "System activity logs (login attempts, failed votes, device alerts)"
+    },
+    "voter_registration": {
+      "fields": ["Full Name", "Voter ID", "Fingerprint Hash"],
+      "import_export": ["CSV import", "CSV/PDF export"],
+      "sync": "Push voter database to ESP32 devices via API"
+    },
+    "vote_monitoring": {
+      "real_time_logs": "Every incoming vote with masked voter ID, candidate, timestamp, device ID",
+      "visualization": "Line chart for turnout over time, bar chart for candidate votes"
+    },
+    "device_management": {
+      "device_status": ["Online/Offline", "Last Sync Time", "Battery Level"],
+      "remote_control": ["Lock/Unlock voting device", "Update candidate list"]
+    },
+    "security": {
+      "admin_roles": ["Super Admin", "Election Officer", "Observer"],
+      "auth_provider": "Supabase Auth with RLS policies",
+      "alerts": ["Duplicate voting attempt", "Unregistered fingerprint attempt", "Device tampering alert"]
+    },
+    "reporting": {
+      "generate_results": "PDF and CSV reports of votes",
+      "audit_trail": "Show rejected votes with reasons",
+      "tamper_proof": "Optional blockchain hash logging"
+    }
+  },
+  "integration_with_esp32": {
+    "vote_submission": {
+      "method": "ESP32 sends HTTPS POST request to Next.js API route",
+      "example_payload": {
+        "device_id": "machine_01",
+        "voter_id": "U19MN2007",
+        "candidate": "Candidate_A",
+        "timestamp": "2025-09-15T14:35:22Z",
+        "fingerprint_hash": "ab23fe901..."
+      }
+    },
+    "voter_sync": {
+      "method": "ESP32 fetches voter database and candidate list via REST API from Supabase backend",
+      "example_response": {
+        "voters": [
+          { "id": "U19MN2007", "fingerprint_hash": "ab23fe901..." },
+          { "id": "U19MN2010", "fingerprint_hash": "cd78a2bb1..." }
+        ],
+        "candidates": ["Candidate_A", "Candidate_B", "Candidate_C"]
+      }
+    }
+  },
+  "user_roles": {
+    "super_admin": "Full control over election setup, devices, and reports",
+    "election_officer": "Manage voters, monitor votes, generate reports",
+    "observer": "View-only access to live results"
+  }
+}
