@@ -174,11 +174,14 @@ export class MemStorage implements IStorage {
   async createDevice(insertDevice: InsertDevice): Promise<Device> {
     const id = randomUUID();
     const device: Device = {
-      ...insertDevice,
       id,
+      deviceId: insertDevice.deviceId,
+      name: insertDevice.name,
       status: insertDevice.status || "offline",
       batteryLevel: insertDevice.batteryLevel ?? 0,
-      lastSync: new Date()
+      lastSync: new Date(),
+      location: insertDevice.location ?? null,
+      firmwareVersion: insertDevice.firmwareVersion ?? null,
     };
     this.devices.set(id, device);
     return device;

@@ -1,32 +1,140 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useRef } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Plus, Upload, Download, RefreshCw } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
+import { isSameDay } from "date-fns";
+import { Voter } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { downloadBlob } from "@/lib/utils";
 
 export default function VoterRegistrationCard() {
   const { hasPermission } = useAuth();
-  const { data: voters = [] } = useQuery({
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const { data: voters = [] } = useQuery<Voter[]>({
     queryKey: ["/api/voters"],
   });
 
-  // Calculate today's registrations (mock for now since we don't have date filtering)
-  const todaysRegistrations = Math.floor(Math.random() * 50) + 100;
-  const pendingApprovals = Math.floor(Math.random() * 30) + 10;
+  const todaysRegistrations = useMemo(() => {
+    const today = new Date();
+    return voters.filter((voter) =>
+      voter.createdAt ? isSameDay(new Date(voter.createdAt), today) : false
+    ).length;
+  }, [voters]);
+
+  const pendingApprovals = useMemo(
+    () => voters.filter((voter) => !voter.hasVoted).length,
+    [voters],
+  );
+
+  const bulkImportMutation = useMutation({
+    mutationFn: async (importedVoters: Pick<Voter, "voterId" | "fullName" | "fingerprintHash">[]) => {
+      const response = await apiRequest("POST", "/api/voters/bulk", { voters: importedVoters });
+      return response.json();
+    },
+    onSuccess: (data: Voter[]) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/voters"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      toast({
+        title: "Import complete",
+        description: `${data.length} voters imported successfully`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Import failed",
+        description: "Unable to import the selected CSV file",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleAddVoter = () => {
-    console.log("Add voter clicked");
+    setLocation("/voters?create=1");
   };
 
   const handleBulkImport = () => {
-    console.log("Bulk import clicked");
+    if (!hasPermission("voters")) return;
+    fileInputRef.current?.click();
   };
 
   const handleExportVoters = () => {
-    console.log("Export voters clicked");
+    if (voters.length === 0) {
+      toast({
+        title: "No voters to export",
+        description: "Register voters before exporting a CSV report",
+      });
+      return;
+    }
+
+    const csvContent = [
+      "voterId,fullName,fingerprintHash,hasVoted,createdAt",
+      ...voters.map((voter) =>
+        `${voter.voterId},${voter.fullName},${voter.fingerprintHash},${voter.hasVoted},${voter.createdAt}`
+      ),
+    ].join("\n");
+
+    downloadBlob(
+      `securevote_voters_${new Date().toISOString().split("T")[0]}.csv`,
+      csvContent,
+      "text/csv",
+    );
   };
 
   const handleSyncWithDevices = () => {
-    console.log("Sync with devices clicked");
+    setLocation("/devices");
+  };
+
+  const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const [headerRow, ...rows] = text
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      const headers = headerRow.split(",").map((header) => header.trim());
+      const requiredHeaders = ["voterId", "fullName", "fingerprintHash"];
+      const hasAllHeaders = requiredHeaders.every((header) => headers.includes(header));
+
+      if (!hasAllHeaders) {
+        toast({
+          title: "Invalid CSV format",
+          description: "CSV must include voterId, fullName and fingerprintHash columns",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const mappedVoters = rows.map((row) => {
+        const values = row.split(",").map((value) => value.trim());
+        const voter: any = {};
+        headers.forEach((header, index) => {
+          voter[header] = values[index] ?? "";
+        });
+        return voter;
+      });
+
+      bulkImportMutation.mutate(mappedVoters);
+    } catch (error) {
+      toast({
+        title: "Import failed",
+        description: "Unable to read the selected CSV file",
+        variant: "destructive",
+      });
+    } finally {
+      if (event.target) {
+        event.target.value = "";
+      }
+    }
   };
 
   return (
@@ -57,6 +165,10 @@ export default function VoterRegistrationCard() {
         </div>
       </div>
 
+      <div className="text-sm text-muted-foreground mb-4" data-testid="total-registered">
+        Total registered voters: <span className="text-foreground font-medium">{voters.length}</span>
+      </div>
+
       {/* Quick Actions */}
       <div className="space-y-3">
         {hasPermission("voters") && (
@@ -74,7 +186,15 @@ export default function VoterRegistrationCard() {
             </svg>
           </button>
         )}
-        
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          className="hidden"
+          onChange={handleFileSelected}
+        />
+
         <button
           onClick={handleExportVoters}
           className="w-full flex items-center justify-between p-3 bg-secondary hover:bg-accent rounded-lg transition-colors"

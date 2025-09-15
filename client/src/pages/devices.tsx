@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Device } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
-import { RefreshCw, WifiOff, Wifi, AlertTriangle, Battery, MapPin } from "lucide-react";
+import { RefreshCw, WifiOff, Wifi, AlertTriangle, Battery, MapPin, Fingerprint } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
@@ -33,6 +33,35 @@ export default function Devices() {
       toast({
         title: "Sync failed",
         description: "Failed to synchronize device",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const testVoteMutation = useMutation({
+    mutationFn: async (deviceId: string) => {
+      const response = await apiRequest("POST", `/api/devices/${deviceId}/test-vote`, {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/devices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/voters"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/votes/results"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/votes/logs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/votes/logs?limit=200"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activity-logs"] });
+      toast({
+        title: "Test vote recorded",
+        description: data?.voterId
+          ? `Vote captured for voter ${String(data.voterId).slice(0, 3)}***`
+          : "Test vote submitted successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Test vote failed",
+        description: error?.message || "Unable to submit a test vote",
         variant: "destructive",
       });
     },
@@ -80,6 +109,10 @@ export default function Devices() {
     for (const device of onlineDevices) {
       syncMutation.mutate(device.deviceId);
     }
+  };
+
+  const handleTestVote = (deviceId: string) => {
+    testVoteMutation.mutate(deviceId);
   };
 
   if (isLoading) {
@@ -224,7 +257,7 @@ export default function Devices() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex space-x-2 pt-2">
+                <div className="flex flex-wrap gap-2 pt-2">
                   <Button
                     onClick={() => handleSyncDevice(device.deviceId)}
                     disabled={device.status === "offline" || syncMutation.isPending}
@@ -235,6 +268,17 @@ export default function Devices() {
                   >
                     <RefreshCw className="h-3 w-3 mr-1" />
                     Sync
+                  </Button>
+                  <Button
+                    onClick={() => handleTestVote(device.deviceId)}
+                    disabled={device.status === "offline" || testVoteMutation.isPending}
+                    variant="default"
+                    size="sm"
+                    className="flex-1"
+                    data-testid={`button-test-vote-${device.deviceId}`}
+                  >
+                    <Fingerprint className="h-3 w-3 mr-1" />
+                    Test Vote
                   </Button>
                   <Button
                     variant="outline"
