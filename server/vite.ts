@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
 import viteConfig from "../vite.config";
@@ -41,12 +42,14 @@ export async function setupVite(app: Express, server: Server) {
   });
 
   app.use(vite.middlewares);
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
     try {
       const clientTemplate = path.resolve(
-        import.meta.dirname,
+        currentDir,
         "..",
         "client",
         "index.html",
@@ -68,8 +71,10 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+
   const candidatePaths = [
-    path.resolve(import.meta.dirname, "public"),
+    path.resolve(currentDir, "public"),
     path.resolve(process.cwd(), "dist", "public"),
   ];
 
