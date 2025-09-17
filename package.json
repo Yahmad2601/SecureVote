@@ -8,6 +8,7 @@
     "build": "vite build && esbuild server/index.ts server/app.ts --platform=node --packages=external --bundle --format=esm --outdir=dist/server",
     "start": "NODE_ENV=production node dist/server/index.js",
     "check": "tsc",
+    "postinstall": "node scripts/ensure-rollup-binary.cjs",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx server/scripts/seed.ts"
   },
