@@ -37,39 +37,31 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
-  const server = await registerRoutes(app);
+// We wrap the async logic in a function but don't call listen
+async function configureApp() {
+  await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
     res.status(status).json({ message });
-    throw err;
+    // It's better not to throw the error again in production
+    // as it might crash the serverless function.
+    // console.error(err);
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
+  // Vercel's environment is 'production', so this logic is fine.
+  if (process.env.NODE_ENV === "development") {
+    // This part won't run on Vercel, which is correct.
+    const server = await registerRoutes(app);
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
+}
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5000", 10);
-  server.listen(
-    {
-      port,
-      host: "127.0.0.1",
-      // reusePort: true,
-    },
-    () => {
-      log(`serving on port ${port}`);
-    }
-  );
-})();
+// Call the configuration function
+configureApp();
+
+// Export the app for Vercel
+export default app;
