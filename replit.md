@@ -85,3 +85,36 @@ The application is designed to integrate with ESP32-based voting devices through
 - **REST API**: HTTP endpoints for device communication and data synchronization
 - **Device Management**: Remote device status monitoring and control capabilities
 - **Fingerprint Data**: Secure handling of biometric hash data for voter verification
+
+## Deployment Checklist
+
+To prepare the application for Vercel (or any Node.js) deployment, complete the following steps:
+
+1. **Configure environment variables**
+   - `DATABASE_URL` (required): PostgreSQL connection string with SSL support enabled.
+   - `DEFAULT_ADMIN_PASSWORD` (required for seeding): Plain-text password used when running `npm run db:seed`. This value is never stored in the repository.
+   - `DEFAULT_ADMIN_USERNAME` (optional, default `admin`): Username for the initial super admin account created by the seed script.
+   - `DEFAULT_ADMIN_FULL_NAME` (optional, default `System Administrator`): Display name for the initial admin.
+   - `SEED_SAMPLE_DATA` (optional): Set to `true` to populate demo candidates and devices during seeding.
+
+2. **Provision the database schema**
+   ```bash
+   npm run db:push
+   ```
+
+3. **Seed critical data**
+   ```bash
+   npm run db:seed
+   ```
+   This command creates the initial super admin user and, if enabled, demo data. It is safe to run multiple times; existing records will be left untouched.
+
+4. **Build the project** (Vercel runs this automatically during deployment)
+   ```bash
+   npm run build
+   ```
+   - **Build command**: `npm run build`
+   - **Output directory**: `dist`
+
+5. **Verify production readiness**
+   - Confirm that runtime environment variables are defined in Vercel.
+   - Rotate the seeded admin password after the first login and provide credentials to authorized personnel only.
