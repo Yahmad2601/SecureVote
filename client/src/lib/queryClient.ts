@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { notifyUnauthorized } from "./auth-events";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -19,6 +20,10 @@ export async function apiRequest(
     credentials: "include",
   });
 
+  if (res.status === 401) {
+    notifyUnauthorized();
+  }
+
   await throwIfResNotOk(res);
   return res;
 }
@@ -33,8 +38,12 @@ export const getQueryFn: <T>(options: {
       credentials: "include",
     });
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+    if (res.status === 401) {
+      notifyUnauthorized();
+
+      if (unauthorizedBehavior === "returnNull") {
+        return null;
+      }
     }
 
     await throwIfResNotOk(res);

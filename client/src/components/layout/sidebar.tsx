@@ -138,7 +138,9 @@ export default function Sidebar() {
         <Button
           variant="ghost"
           className="w-full justify-start text-muted-foreground hover:text-foreground"
-          onClick={logout}
+          onClick={() => {
+            void logout();
+          }}
           data-testid="button-logout"
         >
           <LogOut className="w-4 h-4 mr-2" />

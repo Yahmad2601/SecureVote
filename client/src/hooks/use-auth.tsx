@@ -1,13 +1,13 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { User } from "@shared/schema";
-import { getStoredUser, setStoredUser, hasPermission as checkPermission } from "@/lib/auth";
-import { apiRequest } from "@/lib/queryClient";
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { hasPermission as checkPermission, type AuthenticatedUser } from "@/lib/auth";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { setUnauthorizedHandler } from "@/lib/auth-events";
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthenticatedUser | null;
   isAuthenticated: boolean;
   login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
 }
 
@@ -18,13 +18,60 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = getStoredUser();
-    setUser(storedUser);
-    setIsLoading(false);
+    let isMounted = true;
+
+    const handleUnauthorized = () => {
+      if (!isMounted) return;
+      setUser(null);
+      setIsLoading(false);
+      queryClient.clear();
+    };
+
+    setUnauthorizedHandler(handleUnauthorized);
+
+    const restoreSession = async () => {
+      try {
+        const res = await fetch("/api/auth/session", {
+          credentials: "include",
+        });
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (res.status === 401) {
+          setUser(null);
+          return;
+        }
+
+        if (!res.ok) {
+          throw new Error(`${res.status}: ${res.statusText}`);
+        }
+
+        const data = await res.json();
+        setUser(data.user as AuthenticatedUser);
+      } catch (error) {
+        console.error("Failed to restore session", error);
+        if (isMounted) {
+          setUser(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void restoreSession();
+
+    return () => {
+      isMounted = false;
+      setUnauthorizedHandler(null);
+    };
   }, []);
 
   const login = async (username: string, password: string) => {
@@ -32,17 +79,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
       username,
       password,
     });
-    
+
     const data = await response.json();
-    const authenticatedUser = data.user as User;
-    
+    const authenticatedUser = data.user as AuthenticatedUser;
+
     setUser(authenticatedUser);
-    setStoredUser(authenticatedUser);
+    queryClient.clear();
   };
 
-  const logout = () => {
-    setUser(null);
-    setStoredUser(null);
+  const logout = async () => {
+    try {
+      await apiRequest("POST", "/api/auth/logout");
+    } catch (error) {
+      console.error("Failed to logout", error);
+    } finally {
+      setUser(null);
+      queryClient.clear();
+    }
   };
 
   const hasPermission = (permission: string) => {
