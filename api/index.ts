@@ -1,19 +1,25 @@
+import { access } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
 import type { Express, Request, Response } from "express";
 import type { AppMode, CreateAppResult } from "../server/app";
 
 type CreateApp = (mode?: AppMode) => Promise<CreateAppResult>;
 
-const distCandidates = [
-  "../dist/server/app.js",
-  "../dist/server/app.mjs",
-  "../dist/server/app.cjs",
-];
+const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 
-const sourceCandidates = [
-  "../server/app.js",
-  "../server/app.mjs",
-  "../server/app.cjs",
-];
+const searchRoots = deriveSearchRoots(moduleDirectory);
+
+const distCandidates = buildCandidatePaths(
+  ["dist/server/app.js", "dist/server/app.mjs", "dist/server/app.cjs"],
+  searchRoots,
+);
+
+const sourceCandidates = buildCandidatePaths(
+  ["server/app.js", "server/app.mjs", "server/app.cjs"],
+  searchRoots,
+);
 
 const candidatePaths =
   process.env.NODE_ENV === "production"
@@ -25,32 +31,47 @@ let createAppPromise: Promise<CreateApp> | undefined;
 async function loadCreateApp(): Promise<CreateApp> {
   if (!createAppPromise) {
     createAppPromise = (async () => {
-      const triedPaths: string[] = [];
+      const attemptedPaths: string[] = [];
+      const existingCandidates: string[] = [];
 
       for (const candidate of candidatePaths) {
-        const candidateUrl = new URL(candidate, import.meta.url);
-        triedPaths.push(candidateUrl.pathname);
+        attemptedPaths.push(candidate);
 
-        try {
-          const moduleExports = await import(candidateUrl.href);
-          const resolved = extractCreateApp(moduleExports);
-
-          if (resolved) {
-            console.info(`Loaded createApp from ${candidateUrl.pathname}`);
-            return resolved;
-          }
-        } catch (error) {
-          if (isModuleNotFoundError(error, candidateUrl.pathname)) {
-            continue;
-          }
-
-          throw error;
+        if (!(await fileExists(candidate))) {
+          continue;
         }
+
+        existingCandidates.push(candidate);
+
+        const candidateUrl = pathToFileURL(candidate).href;
+
+        const moduleExports = await import(candidateUrl);
+        const resolved = extractCreateApp(moduleExports);
+
+        if (resolved) {
+          console.info(`Loaded createApp from ${candidate}`);
+          return resolved;
+        }
+
+        console.warn(
+          `Found module at ${candidate} but it did not export a createApp factory.`,
+        );
       }
 
-      throw new Error(
-        `Unable to locate createApp implementation. Checked paths: ${triedPaths.join(", ")}`,
-      );
+      const messageLines = [
+        "Unable to locate createApp implementation.",
+        `Checked paths: ${attemptedPaths.join(", ")}`,
+      ];
+
+      if (existingCandidates.length > 0) {
+        messageLines.push(
+          `Modules existed at: ${existingCandidates.join(", ")} but did not expose a compatible createApp export.`,
+        );
+      }
+
+      messageLines.push(`Search roots: ${searchRoots.join(", ")}`);
+
+      throw new Error(messageLines.join("\n"));
     })().catch((error) => {
       createAppPromise = undefined;
       throw error;
@@ -88,34 +109,6 @@ function extractCreateApp(moduleExports: unknown): CreateApp | undefined {
   return undefined;
 }
 
-function isModuleNotFoundError(error: unknown, attemptedPath: string): boolean {
-  if (!error || typeof error !== "object") {
-    return false;
-  }
-
-  const normalize = (value: string) => value.replace(/\\/g, "/");
-
-  const attemptedNormalized = normalize(attemptedPath);
-
-  if ("code" in error && typeof (error as { code?: unknown }).code === "string") {
-    const code = (error as { code: string }).code;
-    if (code === "ERR_MODULE_NOT_FOUND" || code === "MODULE_NOT_FOUND") {
-      if (error instanceof Error) {
-        return normalize(error.message).includes(attemptedNormalized);
-      }
-
-      return true;
-    }
-  }
-
-  if (error instanceof Error) {
-    const message = normalize(error.message);
-    return /Cannot find module/i.test(message) && message.includes(attemptedNormalized);
-  }
-
-  return false;
-}
-
 let appPromise: Promise<Express> | undefined;
 
 async function getApp(): Promise<Express> {
@@ -133,6 +126,68 @@ async function getApp(): Promise<Express> {
   }
 
   return appPromise;
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function buildCandidatePaths(relativePaths: string[], roots: string[]): string[] {
+  const results: string[] = [];
+  const seen = new Set<string>();
+
+  for (const root of roots) {
+    for (const relative of relativePaths) {
+      const candidate = path.resolve(root, relative);
+      if (seen.has(candidate)) {
+        continue;
+      }
+
+      seen.add(candidate);
+      results.push(candidate);
+    }
+  }
+
+  return results;
+}
+
+function deriveSearchRoots(start: string): string[] {
+  const roots: string[] = [];
+  const seen = new Set<string>();
+
+  let current: string | undefined = start;
+
+  for (let index = 0; index < 5 && current; index += 1) {
+    if (!seen.has(current)) {
+      roots.push(current);
+      seen.add(current);
+    }
+
+    const parent = path.dirname(current);
+    if (parent === current) {
+      break;
+    }
+
+    current = parent;
+  }
+
+  const additionalRoots = [process.cwd(), process.env.LAMBDA_TASK_ROOT].filter(
+    (value): value is string => Boolean(value),
+  );
+
+  for (const root of additionalRoots) {
+    if (!seen.has(root)) {
+      roots.push(root);
+      seen.add(root);
+    }
+  }
+
+  return roots;
 }
 
 export default async function handler(req: Request, res: Response) {
