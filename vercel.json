@@ -8,6 +8,9 @@
       "includeFiles": "dist/public/**"
     }
   },
+  "env": {
+    "SESSION_SECRET": "@securevote-session-secret"
+  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.ts" },
     { "source": "/(.*)", "destination": "/api/index.ts" }

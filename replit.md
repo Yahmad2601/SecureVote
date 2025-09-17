@@ -92,6 +92,7 @@ To prepare the application for Vercel (or any Node.js) deployment, complete the 
 
 1. **Configure environment variables**
    - `DATABASE_URL` (required): PostgreSQL connection string with SSL support enabled.
+   - `SESSION_SECRET` (required in production): At least 32 random characters. Generate a unique, high-entropy value (for example with `openssl rand -hex 32`) and store it as a protected environment secret.
    - `DEFAULT_ADMIN_PASSWORD` (required for seeding): Plain-text password used when running `npm run db:seed`. This value is never stored in the repository.
    - `DEFAULT_ADMIN_USERNAME` (optional, default `admin`): Username for the initial super admin account created by the seed script.
    - `DEFAULT_ADMIN_FULL_NAME` (optional, default `System Administrator`): Display name for the initial admin.
@@ -117,4 +118,5 @@ To prepare the application for Vercel (or any Node.js) deployment, complete the 
 
 5. **Verify production readiness**
    - Confirm that runtime environment variables are defined in Vercel.
+   - Create a Vercel secret named `securevote-session-secret` containing your generated `SESSION_SECRET`, then link it to the project (the deployment configuration references this secret automatically).
    - Rotate the seeded admin password after the first login and provide credentials to authorized personnel only.
