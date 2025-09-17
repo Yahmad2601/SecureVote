@@ -2,12 +2,28 @@ import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
-import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
 
-const viteLogger = createLogger();
+type ViteModule = typeof import("vite");
+type ViteConfigModule = Awaited<typeof import("../vite.config")>;
+
+async function loadViteDependencies(): Promise<{
+  createViteServer: ViteModule["createServer"];
+  createLogger: ViteModule["createLogger"];
+  viteConfig: ViteConfigModule["default"];
+}> {
+  const [viteModule, viteConfigModule] = await Promise.all([
+    import("vite"),
+    import("../vite.config"),
+  ]);
+
+  return {
+    createViteServer: viteModule.createServer,
+    createLogger: viteModule.createLogger,
+    viteConfig: viteConfigModule.default,
+  };
+}
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -21,6 +37,9 @@ export function log(message: string, source = "express") {
 }
 
 export async function setupVite(app: Express, server: Server) {
+  const { createViteServer, createLogger, viteConfig } = await loadViteDependencies();
+
+  const viteLogger = createLogger();
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
