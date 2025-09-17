@@ -6,7 +6,8 @@ let appPromise: Promise<Express> | undefined;
 
 async function loadCreateApp(): Promise<CreateApp> {
   try {
-    const module = (await import("../dist/server/app.js")) as { createApp: CreateApp };
+    const modulePath = new URL("../dist/server/app.js", import.meta.url);
+    const module = (await import(modulePath.href)) as { createApp: CreateApp };
     return module.createApp;
   } catch (error) {
     if (process.env.NODE_ENV === "production") {
