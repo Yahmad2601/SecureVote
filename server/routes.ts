@@ -1,8 +1,25 @@
-import type { Express } from "express";
+import type { Express, RequestHandler } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertVoteSchema, insertSecurityLogSchema, insertVoterSchema, insertActivityLogSchema } from "@shared/schema";
+import type { User } from "@shared/schema";
 import { verifyPassword } from "./auth/password";
+import { SESSION_COOKIE_NAME } from "./auth/session";
+
+type SafeUser = Omit<User, "password">;
+
+const sanitizeUser = (user: User): SafeUser => {
+  const { password: _password, ...safeUser } = user;
+  return safeUser;
+};
+
+const requireAuth: RequestHandler = (req, res, next) => {
+  if (req.session?.userId) {
+    return next();
+  }
+
+  res.status(401).json({ message: "Unauthorized" });
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication endpoints
@@ -33,6 +50,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
+      const safeUser = sanitizeUser(user);
+
+      try {
+        await new Promise<void>((resolve, reject) => {
+          req.session.regenerate((regenerateError) => {
+            if (regenerateError) {
+              reject(regenerateError);
+              return;
+            }
+
+            req.session.userId = user.id;
+            req.session.user = safeUser;
+
+            req.session.save((saveError) => {
+              if (saveError) {
+                reject(saveError);
+                return;
+              }
+              resolve();
+            });
+          });
+        });
+      } catch (sessionError) {
+        console.error("Failed to establish session", sessionError);
+        return res.status(500).json({ message: "Failed to establish session" });
+      }
+
       await storage.createActivityLog({
         type: "user_login",
         description: `User ${user.fullName} logged in`,
@@ -40,7 +84,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: { username: trimmedUsername, ip: req.ip }
       });
 
-      const { password: _password, ...safeUser } = user;
       res.json({ user: safeUser });
     } catch (error) {
       console.error("Login failed", error);
@@ -48,8 +91,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/auth/session", async (req, res) => {
+    const sessionUserId = req.session?.userId;
+
+    if (!sessionUserId) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    try {
+      if (!req.session.user) {
+        const storedUser = await storage.getUser(sessionUserId);
+
+        if (!storedUser) {
+          await new Promise<void>((resolve) => {
+            req.session?.destroy(() => resolve());
+          });
+          return res.status(401).json({ message: "Not authenticated" });
+        }
+
+        req.session.user = sanitizeUser(storedUser);
+      }
+
+      res.json({ user: req.session.user });
+    } catch (error) {
+      console.error("Failed to load session", error);
+      res.status(500).json({ message: "Failed to load session" });
+    }
+  });
+
+  app.post("/api/auth/logout", requireAuth, async (req, res) => {
+    try {
+      const sessionUser = req.session.user;
+      const sessionUserId = req.session.userId;
+
+      if (sessionUserId) {
+        try {
+          await storage.createActivityLog({
+            type: "user_logout",
+            description: `User ${sessionUser?.fullName ?? sessionUserId} logged out`,
+            userId: sessionUserId,
+            metadata: { username: sessionUser?.username, ip: req.ip },
+          });
+        } catch (logError) {
+          console.error("Failed to record activity log for logout", logError);
+        }
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        req.session.destroy((destroyError) => {
+          if (destroyError) {
+            reject(destroyError);
+            return;
+          }
+          resolve();
+        });
+      });
+
+      const isProduction = req.app.get("env") === "production";
+      res.clearCookie(SESSION_COOKIE_NAME, {
+        httpOnly: true,
+        sameSite: isProduction ? "strict" : "lax",
+        secure: isProduction,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Logout failed", error);
+      res.status(500).json({ message: "Logout failed" });
+    }
+  });
+
   // Dashboard stats
-  app.get("/api/dashboard/stats", async (req, res) => {
+  app.get("/api/dashboard/stats", requireAuth, async (req, res) => {
     try {
       const stats = await storage.getDashboardStats();
       res.json(stats);
@@ -59,7 +172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Candidates
-  app.get("/api/candidates", async (req, res) => {
+  app.get("/api/candidates", requireAuth, async (req, res) => {
     try {
       const candidates = await storage.getCandidates();
       res.json(candidates);
@@ -69,7 +182,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Votes and Results
-  app.get("/api/votes/results", async (req, res) => {
+  app.get("/api/votes/results", requireAuth, async (req, res) => {
     try {
       const results = await storage.getVotesByCandidate();
       res.json(results);
@@ -79,7 +192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ESP32 vote submission endpoint
-  app.post("/api/esp32/vote", async (req, res) => {
+  app.post("/api/esp32/vote", requireAuth, async (req, res) => {
     try {
       const voteData = insertVoteSchema.parse(req.body);
 
@@ -154,7 +267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/votes/logs", async (req, res) => {
+  app.get("/api/votes/logs", requireAuth, async (req, res) => {
     try {
       const limitParam = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
       const limit = Number.isNaN(limitParam) ? 100 : limitParam;
@@ -202,7 +315,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ESP32 voter sync endpoint
-  app.get("/api/esp32/sync/:deviceId", async (req, res) => {
+  app.get("/api/esp32/sync/:deviceId", requireAuth, async (req, res) => {
     try {
       const { deviceId } = req.params;
       
@@ -228,7 +341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Voters
-  app.get("/api/voters", async (req, res) => {
+  app.get("/api/voters", requireAuth, async (req, res) => {
     try {
       const voters = await storage.getVoters();
       res.json(voters);
@@ -237,7 +350,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/voters", async (req, res) => {
+  app.post("/api/voters", requireAuth, async (req, res) => {
     try {
       const voterData = insertVoterSchema.parse(req.body);
       const voter = await storage.createVoter(voterData);
@@ -254,7 +367,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/voters/bulk", async (req, res) => {
+  app.post("/api/voters/bulk", requireAuth, async (req, res) => {
     try {
       const { voters: voterDataList } = req.body;
       const validatedVoters = voterDataList.map((v: any) => insertVoterSchema.parse(v));
@@ -273,7 +386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Devices
-  app.get("/api/devices", async (req, res) => {
+  app.get("/api/devices", requireAuth, async (req, res) => {
     try {
       const devices = await storage.getDevices();
       res.json(devices);
@@ -282,7 +395,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/devices/:deviceId/sync", async (req, res) => {
+  app.post("/api/devices/:deviceId/sync", requireAuth, async (req, res) => {
     try {
       const { deviceId } = req.params;
       await storage.updateDeviceSync(deviceId);
@@ -299,7 +412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/devices/:deviceId/test-vote", async (req, res) => {
+  app.post("/api/devices/:deviceId/test-vote", requireAuth, async (req, res) => {
     try {
       const { deviceId } = req.params;
       const { candidateId } = req.body ?? {};
@@ -360,7 +473,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Security logs
-  app.get("/api/security-logs", async (req, res) => {
+  app.get("/api/security-logs", requireAuth, async (req, res) => {
     try {
       const logs = await storage.getSecurityLogs();
       res.json(logs);
@@ -369,7 +482,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/security-logs/:id/resolve", async (req, res) => {
+  app.post("/api/security-logs/:id/resolve", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       await storage.resolveSecurityLog(id);
@@ -380,7 +493,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Activity logs
-  app.get("/api/activity-logs", async (req, res) => {
+  app.get("/api/activity-logs", requireAuth, async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
       const logs = await storage.getActivityLogs(limit);

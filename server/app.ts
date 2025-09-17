@@ -1,5 +1,6 @@
 import express, { type NextFunction, type Request, type Response, type Express } from "express";
 import { type Server } from "http";
+import { createSessionMiddleware } from "./auth/session";
 import { registerRoutes } from "./routes";
 import { log, serveStatic, setupVite } from "./vite";
 
@@ -17,6 +18,7 @@ export async function createApp(mode: AppMode = (process.env.NODE_ENV === "produ
 
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
+  app.use(createSessionMiddleware(mode));
 
   app.use((req, res, next) => {
     const start = Date.now();
