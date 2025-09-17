@@ -92,6 +92,11 @@ To prepare the application for Vercel (or any Node.js) deployment, complete the 
 
 1. **Configure environment variables**
    - `DATABASE_URL` (required): PostgreSQL connection string with SSL support enabled.
+   - `SESSION_STORE_URL` (optional): PostgreSQL connection string dedicated to session storage. Defaults to `DATABASE_URL`.
+   - `SESSION_STORE_SSLMODE` (optional): Controls TLS verification for the session store connection (`require`, `verify-full`, or `disable`). Defaults to `require`.
+   - `SESSION_STORE_SCHEMA` (optional): Custom schema for the session table when different from `public`.
+   - `SESSION_STORE_TABLE` (optional): Override the session table name (default `session`).
+   - `SESSION_STORE_CREATE_TABLE` (optional): Set to `false` to disable automatic session table creation.
    - `DEFAULT_ADMIN_PASSWORD` (required for seeding): Plain-text password used when running `npm run db:seed`. This value is never stored in the repository.
    - `DEFAULT_ADMIN_USERNAME` (optional, default `admin`): Username for the initial super admin account created by the seed script.
    - `DEFAULT_ADMIN_FULL_NAME` (optional, default `System Administrator`): Display name for the initial admin.
