@@ -22,7 +22,7 @@ import {
   type InsertSecurityLog,
   type ActivityLog,
   type InsertActivityLog,
-} from "@shared/schema";
+} from "../shared/schema.js";
 import type { IStorage } from "./storage.js";
 
 export class PostgreSQLStorage implements IStorage {
