@@ -7,10 +7,7 @@
     },
     {
       "src": "package.json",
-      "use": "@vercel/static-build",
-      "options": {
-        "distDir": "dist/public"
-      }
+      "use": "@vercel/static-build"
     }
   ],
   "rewrites": [
