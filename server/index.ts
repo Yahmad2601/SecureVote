@@ -1,12 +1,14 @@
 import express, { type Request, Response, NextFunction } from "express";
+import http from "http"; // Import the 'http' module
 import { registerRoutes } from "./routes.js";
-import { setupVite, serveStatic, log } from "./vite.js";
+import { serveStatic, log } from "./vite.js"; // This now only imports prod-safe functions
 import "dotenv/config";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Your existing logging middleware is perfectly fine.
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -25,11 +27,9 @@ app.use((req, res, next) => {
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
-
       if (logLine.length > 80) {
         logLine = logLine.slice(0, 79) + "…";
       }
-
       log(logLine);
     }
   });
@@ -37,31 +37,35 @@ app.use((req, res, next) => {
   next();
 });
 
-// We wrap the async logic in a function but don't call listen
-async function configureApp() {
+(async () => {
   await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
     res.status(status).json({ message });
-    // It's better not to throw the error again in production
-    // as it might crash the serverless function.
-    // console.error(err);
   });
 
-  // Vercel's environment is 'production', so this logic is fine.
-  if (process.env.NODE_ENV === "development") {
-    // This part won't run on Vercel, which is correct.
-    const server = await registerRoutes(app);
-    await setupVite(app, server);
-  } else {
+  // 👇 THIS IS THE CORE LOGIC CHANGE 👇
+  // It separates what runs on Vercel (production) from what runs on your machine (development)
+  if (process.env.NODE_ENV === "production") {
+    // Vercel will run this block
     serveStatic(app);
+  } else {
+    // Your local machine will run this block
+    const server = http.createServer(app);
+
+    // Dynamically import the new dev-only file. This line is ignored by the production build.
+    const { setupVite } = await import("./vite.dev.js");
+    await setupVite(app, server);
+
+    // The server only listens locally, not on Vercel
+    const port = parseInt(process.env.PORT || "5000", 10);
+    server.listen({ port, host: "127.0.0.1" }, () => {
+      log(`serving on port ${port}`);
+    });
   }
-}
+})();
 
-// Call the configuration function
-configureApp();
-
-// Export the app for Vercel
+// Export the app for Vercel. It will be run as a serverless function.
 export default app;
