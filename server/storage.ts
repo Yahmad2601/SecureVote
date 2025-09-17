@@ -15,7 +15,7 @@ import {
   type InsertActivityLog,
 } from "../shared/schema.js";
 import { randomUUID } from "crypto";
-import { PostgreSQLStorage } from "./postgres-storage";
+import { PostgreSQLStorage } from "./postgres-storage.js";
 
 export interface IStorage {
   // User methods
