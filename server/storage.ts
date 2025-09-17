@@ -13,7 +13,7 @@ import {
   type InsertSecurityLog,
   type ActivityLog,
   type InsertActivityLog,
-} from "@shared/schema";
+} from "../shared/schema.js";
 import { randomUUID } from "crypto";
 import { PostgreSQLStorage } from "./postgres-storage";
 

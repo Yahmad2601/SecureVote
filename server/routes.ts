@@ -1,7 +1,12 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { insertVoteSchema, insertSecurityLogSchema, insertVoterSchema, insertActivityLogSchema } from "@shared/schema";
+import { storage } from "./storage.js";
+import {
+  insertVoteSchema,
+  insertSecurityLogSchema,
+  insertVoterSchema,
+  insertActivityLogSchema,
+} from "../shared/schema.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication endpoints
@@ -9,7 +14,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { username, password } = req.body;
       const user = await storage.getUserByUsername(username);
-      
+
       if (!user || user.password !== password) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
@@ -18,7 +23,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: "user_login",
         description: `User ${user.fullName} logged in`,
         userId: user.id,
-        metadata: { username }
+        metadata: { username },
       });
 
       res.json({ user: { ...user, password: undefined } });
@@ -70,7 +75,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           severity: "medium",
           deviceId: voteData.deviceId || undefined,
           voterId: voteData.voterId,
-          description: `Unregistered voter ID ${voteData.voterId} attempted to vote`
+          description: `Unregistered voter ID ${voteData.voterId} attempted to vote`,
         });
         return res.status(400).json({ message: "Voter not registered" });
       }
@@ -81,7 +86,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           severity: "high",
           deviceId: voteData.deviceId || undefined,
           voterId: voteData.voterId,
-          description: `Duplicate vote attempt by voter ${voteData.voterId}`
+          description: `Duplicate vote attempt by voter ${voteData.voterId}`,
         });
         return res.status(400).json({ message: "Voter has already voted" });
       }
@@ -93,12 +98,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           severity: "high",
           deviceId: voteData.deviceId || undefined,
           voterId: voteData.voterId,
-          description: `Fingerprint mismatch for voter ${voteData.voterId}`
+          description: `Fingerprint mismatch for voter ${voteData.voterId}`,
         });
-        return res.status(400).json({ message: "Fingerprint verification failed" });
+        return res
+          .status(400)
+          .json({ message: "Fingerprint verification failed" });
       }
 
-      const device = voteData.deviceId ? await storage.getDevice(voteData.deviceId) : undefined;
+      const device = voteData.deviceId
+        ? await storage.getDevice(voteData.deviceId)
+        : undefined;
 
       // Create vote with normalized device identifier when available
       const vote = await storage.createVote({
@@ -124,7 +133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: {
           maskedVoterId: voteData.voterId.slice(0, 3) + "***",
           deviceIdentifier: device?.deviceId ?? voteData.deviceId ?? null,
-        }
+        },
       });
 
       res.json({ success: true, voteId: vote.id });
@@ -135,7 +144,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/votes/logs", async (req, res) => {
     try {
-      const limitParam = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
+      const limitParam = req.query.limit
+        ? parseInt(req.query.limit as string, 10)
+        : 100;
       const limit = Number.isNaN(limitParam) ? 100 : limitParam;
 
       const [votes, candidates, devices] = await Promise.all([
@@ -144,19 +155,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getDevices(),
       ]);
 
-      const candidateMap = new Map(candidates.map(candidate => [candidate.id, candidate]));
-      const deviceIdMap = new Map(devices.map(device => [device.id, device]));
-      const deviceIdentifierMap = new Map(devices.map(device => [device.deviceId, device]));
+      const candidateMap = new Map(
+        candidates.map((candidate) => [candidate.id, candidate])
+      );
+      const deviceIdMap = new Map(devices.map((device) => [device.id, device]));
+      const deviceIdentifierMap = new Map(
+        devices.map((device) => [device.deviceId, device])
+      );
 
       const sortedVotes = votes
         .slice()
-        .sort((a, b) => new Date(b.timestamp ?? 0).getTime() - new Date(a.timestamp ?? 0).getTime())
+        .sort(
+          (a, b) =>
+            new Date(b.timestamp ?? 0).getTime() -
+            new Date(a.timestamp ?? 0).getTime()
+        )
         .slice(0, limit);
 
       const formatted = sortedVotes.map((vote) => {
-        const candidate = vote.candidateId ? candidateMap.get(vote.candidateId) : undefined;
+        const candidate = vote.candidateId
+          ? candidateMap.get(vote.candidateId)
+          : undefined;
         const device = vote.deviceId
-          ? deviceIdMap.get(vote.deviceId) ?? deviceIdentifierMap.get(vote.deviceId)
+          ? deviceIdMap.get(vote.deviceId) ??
+            deviceIdentifierMap.get(vote.deviceId)
           : undefined;
 
         return {
@@ -169,7 +191,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           deviceId: device?.deviceId ?? vote.deviceId ?? null,
           deviceName: device?.name ?? null,
           deviceLocation: device?.location ?? null,
-          timestamp: vote.timestamp ? new Date(vote.timestamp).toISOString() : new Date().toISOString(),
+          timestamp: vote.timestamp
+            ? new Date(vote.timestamp).toISOString()
+            : new Date().toISOString(),
           verified: vote.verified ?? false,
         };
       });
@@ -184,20 +208,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/esp32/sync/:deviceId", async (req, res) => {
     try {
       const { deviceId } = req.params;
-      
+
       const voters = await storage.getVoters();
       const candidates = await storage.getCandidates();
-      
+
       // Update device sync time
       await storage.updateDeviceSync(deviceId);
-      
+
       const syncData = {
-        voters: voters.map(v => ({
+        voters: voters.map((v) => ({
           id: v.voterId,
           fingerprint_hash: v.fingerprintHash,
-          has_voted: v.hasVoted
+          has_voted: v.hasVoted,
         })),
-        candidates: candidates.map(c => c.name)
+        candidates: candidates.map((c) => c.name),
       };
 
       res.json(syncData);
@@ -220,11 +244,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const voterData = insertVoterSchema.parse(req.body);
       const voter = await storage.createVoter(voterData);
-      
+
       await storage.createActivityLog({
         type: "voter_registered",
         description: `New voter registered: ${voter.fullName} (${voter.voterId})`,
-        metadata: { voterId: voter.voterId }
+        metadata: { voterId: voter.voterId },
       });
 
       res.json(voter);
@@ -236,13 +260,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/voters/bulk", async (req, res) => {
     try {
       const { voters: voterDataList } = req.body;
-      const validatedVoters = voterDataList.map((v: any) => insertVoterSchema.parse(v));
+      const validatedVoters = voterDataList.map((v: any) =>
+        insertVoterSchema.parse(v)
+      );
       const voters = await storage.createVoters(validatedVoters);
-      
+
       await storage.createActivityLog({
         type: "voter_registered",
         description: `Bulk import of ${voters.length} voters completed`,
-        metadata: { count: voters.length }
+        metadata: { count: voters.length },
       });
 
       res.json(voters);
@@ -269,7 +295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.createActivityLog({
         type: "device_sync",
         description: `Device ${deviceId} manually synchronized`,
-        metadata: { deviceId }
+        metadata: { deviceId },
       });
 
       res.json({ success: true });
@@ -289,9 +315,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const voters = await storage.getVoters();
-      const availableVoter = voters.find(voter => !voter.hasVoted);
+      const availableVoter = voters.find((voter) => !voter.hasVoted);
       if (!availableVoter) {
-        return res.status(400).json({ message: "No pending voters available for test vote" });
+        return res
+          .status(400)
+          .json({ message: "No pending voters available for test vote" });
       }
 
       const candidates = await storage.getCandidates();
@@ -300,7 +328,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const selectedCandidate = candidateId
-        ? candidates.find(candidate => candidate.id === candidateId) ?? candidates[0]
+        ? candidates.find((candidate) => candidate.id === candidateId) ??
+          candidates[0]
         : candidates[0];
 
       const votePayload = insertVoteSchema.parse({
@@ -324,7 +353,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           testVote: true,
           deviceIdentifier: device.deviceId,
           candidateName: selectedCandidate.name,
-        }
+        },
       });
 
       res.json({
