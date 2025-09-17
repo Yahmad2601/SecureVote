@@ -118,5 +118,5 @@ To prepare the application for Vercel (or any Node.js) deployment, complete the 
 
 5. **Verify production readiness**
    - Confirm that runtime environment variables are defined in Vercel.
-   - Create a Vercel secret named `securevote-session-secret` containing your generated `SESSION_SECRET`, then link it to the project (the deployment configuration references this secret automatically).
+   - In your Vercel project settings, add an Environment Variable named `SESSION_SECRET` with the value you generated earlier (minimum 32 random characters). If you prefer using the Vercel CLI, run `vercel env add SESSION_SECRET production` and paste the secret value when prompted.
    - Rotate the seeded admin password after the first login and provide credentials to authorized personnel only.
