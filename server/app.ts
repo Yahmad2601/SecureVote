@@ -15,6 +15,7 @@ export async function createApp(mode: AppMode = (process.env.NODE_ENV === "produ
   const app = express();
 
   app.set("env", mode);
+  app.set("trust proxy", 1);
 
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
