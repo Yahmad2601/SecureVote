@@ -98,10 +98,12 @@ export default function Login() {
           </form>
           <div className="mt-6 p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground font-medium mb-2">
-              Demo Credentials:
+              Need access?
             </p>
-            <p className="text-xs text-muted-foreground">Username: admin</p>
-            <p className="text-xs text-muted-foreground">Password: Vulegbo</p>
+            <p className="text-xs text-muted-foreground">
+              Sign in with the administrator credentials configured during deployment.
+              Contact your system administrator if you need help resetting your login.
+            </p>
           </div>
         </CardContent>
       </Card>

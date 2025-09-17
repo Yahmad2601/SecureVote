@@ -2,15 +2,34 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertVoteSchema, insertSecurityLogSchema, insertVoterSchema, insertActivityLogSchema } from "@shared/schema";
+import { verifyPassword } from "./auth/password";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication endpoints
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { username, password } = req.body;
-      const user = await storage.getUserByUsername(username);
-      
-      if (!user || user.password !== password) {
+      const { username, password } = req.body ?? {};
+
+      if (typeof username !== "string" || typeof password !== "string") {
+        return res.status(400).json({ message: "Username and password are required" });
+      }
+
+      const trimmedUsername = username.trim();
+      const user = await storage.getUserByUsername(trimmedUsername);
+      const isValid = user ? await verifyPassword(password, user.password) : false;
+
+      if (!user || !isValid) {
+        try {
+          await storage.createSecurityLog({
+            type: "login_attempt",
+            severity: "medium",
+            description: `Failed login attempt for username ${trimmedUsername}`,
+            metadata: { username: trimmedUsername, ip: req.ip },
+          });
+        } catch (logError) {
+          console.error("Failed to record security log for login attempt", logError);
+        }
+
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
@@ -18,11 +37,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: "user_login",
         description: `User ${user.fullName} logged in`,
         userId: user.id,
-        metadata: { username }
+        metadata: { username: trimmedUsername, ip: req.ip }
       });
 
-      res.json({ user: { ...user, password: undefined } });
+      const { password: _password, ...safeUser } = user;
+      res.json({ user: safeUser });
     } catch (error) {
+      console.error("Login failed", error);
       res.status(500).json({ message: "Login failed" });
     }
   });

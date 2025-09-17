@@ -16,6 +16,7 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { PostgreSQLStorage } from "./postgres-storage";
+import { hashPasswordSync, isPasswordHash } from "./auth/password";
 
 export interface IStorage {
   // User methods
@@ -83,11 +84,18 @@ export class MemStorage implements IStorage {
 
   constructor() {
     // Initialize with default admin user
-    this.createUser({
-      username: "admin",
-      password: "Vulegbo", // In production, this should be hashed
+    const adminUsername = process.env.DEFAULT_ADMIN_USERNAME ?? "admin";
+    const adminFullName = process.env.DEFAULT_ADMIN_FULL_NAME ?? "System Administrator";
+    const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD;
+    const hashedPassword = adminPassword && isPasswordHash(adminPassword)
+      ? adminPassword
+      : hashPasswordSync(adminPassword ?? "ChangeMe!123");
+
+    void this.createUser({
+      username: adminUsername,
+      password: hashedPassword,
       role: "super_admin",
-      fullName: "System Administrator",
+      fullName: adminFullName,
     });
 
     // Initialize with sample candidates
@@ -406,83 +414,5 @@ export class MemStorage implements IStorage {
 
 // Create PostgreSQL storage instance
 const pgStorage = new PostgreSQLStorage();
-
-// Initialize the database with default data
-async function initializeDatabase() {
-  try {
-    // Check if admin user exists
-    const existingAdmin = await pgStorage.getUserByUsername("admin");
-    if (!existingAdmin) {
-      // Create default admin user
-      await pgStorage.createUser({
-        username: "admin",
-        password: "Vulegbo", // In production, this should be hashed
-        role: "super_admin",
-        fullName: "System Administrator",
-      });
-
-      // Create sample candidates
-      await pgStorage.createCandidate({
-        name: "Candidate Alpha",
-        party: "Democratic Party",
-        position: 1,
-      });
-      await pgStorage.createCandidate({
-        name: "Candidate Beta",
-        party: "Republican Party",
-        position: 2,
-      });
-      await pgStorage.createCandidate({
-        name: "Candidate Gamma",
-        party: "Independent",
-        position: 3,
-      });
-
-      // Create sample devices
-      await pgStorage.createDevice({
-        deviceId: "machine_01",
-        name: "Device-01",
-        status: "online",
-        batteryLevel: 87,
-        location: "Building A",
-      });
-      await pgStorage.createDevice({
-        deviceId: "machine_02",
-        name: "Device-02",
-        status: "online",
-        batteryLevel: 92,
-        location: "Building B",
-      });
-      await pgStorage.createDevice({
-        deviceId: "machine_03",
-        name: "Device-03",
-        status: "warning",
-        batteryLevel: 15,
-        location: "Building C",
-      });
-      await pgStorage.createDevice({
-        deviceId: "machine_04",
-        name: "Device-04",
-        status: "offline",
-        batteryLevel: 0,
-        location: "Building D",
-      });
-      await pgStorage.createDevice({
-        deviceId: "machine_05",
-        name: "Device-05",
-        status: "online",
-        batteryLevel: 76,
-        location: "Building E",
-      });
-
-      console.log("Database initialized with default data");
-    }
-  } catch (error) {
-    console.error("Error initializing database:", error);
-  }
-}
-
-// Initialize database on startup
-initializeDatabase();
 
 export const storage = pgStorage;
