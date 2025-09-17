@@ -423,18 +423,18 @@ async function initializeDatabase() {
 
       // Create sample candidates
       await pgStorage.createCandidate({
-        name: "Candidate Alpha",
-        party: "Democratic Party",
+        name: "Bola Ahmed Tinubu",
+        party: "All Progressive Congress (APC)",
         position: 1,
       });
       await pgStorage.createCandidate({
-        name: "Candidate Beta",
-        party: "Republican Party",
+        name: "Atiku Abubakar",
+        party: "African Democratic Congress (ADC)",
         position: 2,
       });
       await pgStorage.createCandidate({
-        name: "Candidate Gamma",
-        party: "Independent",
+        name: "Peter Obi",
+        party: "Labour Party (LP)",
         position: 3,
       });
 
