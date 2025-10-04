@@ -1,7 +1,13 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/layout/header";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format, formatDistanceToNow } from "date-fns";
 import {
@@ -30,7 +36,9 @@ export default function Monitoring() {
     refetchInterval: 5000,
   });
 
-  const { data: voteResults = [], isLoading: resultsLoading } = useQuery<VoteResult[]>({
+  const { data: voteResults = [], isLoading: resultsLoading } = useQuery<
+    VoteResult[]
+  >({
     queryKey: ["/api/votes/results"],
     refetchInterval: 5000,
   });
@@ -42,7 +50,7 @@ export default function Monitoring() {
 
   const uniqueDevices = useMemo(
     () => new Set(voteLogs.map((log) => log.deviceId ?? "unknown")).size,
-    [voteLogs],
+    [voteLogs]
   );
 
   const lastVote = voteLogs[0];
@@ -56,11 +64,15 @@ export default function Monitoring() {
     }
 
     const sortedLogs = [...voteLogs].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+      (a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
     let runningTotal = 0;
-    const dataMap = new Map<string, { time: string; totalVotes: number; index: number }>();
+    const dataMap = new Map<
+      string,
+      { time: string; totalVotes: number; index: number }
+    >();
 
     sortedLogs.forEach((log, index) => {
       runningTotal += 1;
@@ -85,6 +97,18 @@ export default function Monitoring() {
     }));
   }, [voteResults]);
 
+  const lowConfidenceVotes = useMemo(() => {
+    return voteLogs.filter(
+      (log) => log.confidence !== undefined && log.confidence < 100
+    );
+  }, [voteLogs]);
+
+  const weakSignalVotes = useMemo(() => {
+    return voteLogs.filter(
+      (log) => log.signalStrength !== undefined && log.signalStrength < -70
+    );
+  }, [voteLogs]);
+
   const monitoringSummary = {
     totalVotes: stats?.votesCast ?? voteLogs.length,
     registeredVoters: stats?.registeredVoters ?? 0,
@@ -101,6 +125,41 @@ export default function Monitoring() {
       />
 
       <div className="p-6 space-y-6">
+        {lowConfidenceVotes.length > 0 && (
+          <div className="bg-orange-50 border-2 border-orange-200 rounded-lg p-4">
+            <div className="flex items-start space-x-3">
+              <div className="text-orange-600">⚠️</div>
+              <div>
+                <p className="text-sm font-medium text-orange-800">
+                  Low Confidence Fingerprints Detected
+                </p>
+                <p className="text-xs text-orange-700 mt-1">
+                  {lowConfidenceVotes.length} vote
+                  {lowConfidenceVotes.length > 1 ? "s" : ""} recorded with
+                  fingerprint confidence below 100/255. Review recommended.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {weakSignalVotes.length > 0 && (
+          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
+            <div className="flex items-start space-x-3">
+              <div className="text-yellow-600">📶</div>
+              <div>
+                <p className="text-sm font-medium text-yellow-800">
+                  Weak WiFi Signal Detected
+                </p>
+                <p className="text-xs text-yellow-700 mt-1">
+                  {weakSignalVotes.length} vote
+                  {weakSignalVotes.length > 1 ? "s" : ""} submitted with poor
+                  WiFi signal (&lt; -70dBm). Check device connectivity.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2">
@@ -110,7 +169,8 @@ export default function Monitoring() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0 text-sm text-muted-foreground">
-              Turnout {monitoringSummary.turnoutRate.toFixed(1)}% of registered voters
+              Turnout {monitoringSummary.turnoutRate.toFixed(1)}% of registered
+              voters
             </CardContent>
           </Card>
           <Card>
@@ -127,7 +187,9 @@ export default function Monitoring() {
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Live Voting Devices</CardDescription>
-              <CardTitle className="text-3xl">{monitoringSummary.activeDevices}</CardTitle>
+              <CardTitle className="text-3xl">
+                {monitoringSummary.activeDevices}
+              </CardTitle>
             </CardHeader>
             <CardContent className="pt-0 text-sm text-muted-foreground">
               Unique devices submitting votes in this session
@@ -139,7 +201,9 @@ export default function Monitoring() {
               <CardTitle className="text-xl">{lastVoteTime}</CardTitle>
             </CardHeader>
             <CardContent className="pt-0 text-sm text-muted-foreground">
-              {lastVote && lastVote.deviceName ? `Device ${lastVote.deviceName}` : "Awaiting first vote"}
+              {lastVote && lastVote.deviceName
+                ? `Device ${lastVote.deviceName}`
+                : "Awaiting first vote"}
             </CardContent>
           </Card>
         </div>
@@ -148,7 +212,9 @@ export default function Monitoring() {
           <Card className="xl:col-span-2">
             <CardHeader>
               <CardTitle>Turnout Over Time</CardTitle>
-              <CardDescription>Running total of verified votes received</CardDescription>
+              <CardDescription>
+                Running total of verified votes received
+              </CardDescription>
             </CardHeader>
             <CardContent className="h-80">
               {turnoutData.length === 0 ? (
@@ -157,13 +223,29 @@ export default function Monitoring() {
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={turnoutData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                  <LineChart
+                    data={turnoutData}
+                    margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
                     <XAxis dataKey="time" tickLine={false} axisLine={false} />
-                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
-                    <Tooltip formatter={(value) => [value as number, "Votes"]} />
+                    <YAxis
+                      allowDecimals={false}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip
+                      formatter={(value) => [value as number, "Votes"]}
+                    />
                     <Legend />
-                    <Line type="monotone" dataKey="totalVotes" stroke="#2563eb" strokeWidth={2} dot={false} name="Votes" />
+                    <Line
+                      type="monotone"
+                      dataKey="totalVotes"
+                      stroke="#2563eb"
+                      strokeWidth={2}
+                      dot={false}
+                      name="Votes"
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               )}
@@ -189,10 +271,19 @@ export default function Monitoring() {
                   <BarChart data={candidateChartData}>
                     <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
                     <XAxis dataKey="name" tickLine={false} axisLine={false} />
-                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
+                    <YAxis
+                      allowDecimals={false}
+                      tickLine={false}
+                      axisLine={false}
+                    />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="votes" fill="#22c55e" radius={[4, 4, 0, 0]} name="Votes" />
+                    <Bar
+                      dataKey="votes"
+                      fill="#22c55e"
+                      radius={[4, 4, 0, 0]}
+                      name="Votes"
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -204,13 +295,18 @@ export default function Monitoring() {
           <Card className="xl:col-span-2">
             <CardHeader>
               <CardTitle>Live Vote Feed</CardTitle>
-              <CardDescription>Chronological log of biometric votes received</CardDescription>
+              <CardDescription>
+                Chronological log of biometric votes received
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {votesLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3, 4].map((index) => (
-                    <div key={index} className="animate-pulse border border-border rounded-lg p-3">
+                    <div
+                      key={index}
+                      className="animate-pulse border border-border rounded-lg p-3"
+                    >
                       <div className="h-4 bg-muted rounded w-1/3 mb-2"></div>
                       <div className="h-3 bg-muted rounded w-2/3"></div>
                     </div>
@@ -221,7 +317,10 @@ export default function Monitoring() {
                   No votes have been recorded yet.
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1" data-testid="vote-feed">
+                <div
+                  className="space-y-3 max-h-[420px] overflow-y-auto pr-1"
+                  data-testid="vote-feed"
+                >
                   {voteLogs.map((log) => (
                     <div
                       key={log.id}
@@ -230,27 +329,44 @@ export default function Monitoring() {
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-foreground">{log.candidateName}</span>
+                          <span className="font-semibold text-foreground">
+                            {log.candidateName}
+                          </span>
                           {log.candidateParty && (
-                            <Badge variant="secondary">{log.candidateParty}</Badge>
+                            <Badge variant="secondary">
+                              {log.candidateParty}
+                            </Badge>
                           )}
                         </div>
                         <div className="text-sm text-muted-foreground">
                           Voter {log.maskedVoterId}
                           {log.deviceId && (
                             <span>
-                              {" "}• Device {log.deviceName ?? log.deviceId}
-                              {log.deviceLocation ? ` (${log.deviceLocation})` : ""}
+                              {" "}
+                              • Device {log.deviceName ?? log.deviceId}
+                              {log.deviceLocation
+                                ? ` (${log.deviceLocation})`
+                                : ""}
                             </span>
                           )}
                         </div>
+
                         <div className="text-xs text-muted-foreground/80">
-                          Fingerprint {log.verified ? "verified" : "pending verification"}
+                          Fingerprint{" "}
+                          {log.verified ? "verified" : "pending verification"}
+                          {log.confidence &&
+                            ` • Confidence: ${log.confidence}/255`}
+                          {log.signalStrength &&
+                            ` • Signal: ${log.signalStrength}dBm`}
                         </div>
                       </div>
                       <div className="text-xs text-muted-foreground text-right whitespace-nowrap">
                         {format(new Date(log.timestamp), "PPpp")}
-                        <div>{formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}</div>
+                        <div>
+                          {formatDistanceToNow(new Date(log.timestamp), {
+                            addSuffix: true,
+                          })}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -262,7 +378,9 @@ export default function Monitoring() {
           <Card>
             <CardHeader>
               <CardTitle>System Activity</CardTitle>
-              <CardDescription>Latest biometric events and device actions</CardDescription>
+              <CardDescription>
+                Latest biometric events and device actions
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {activities.length === 0 ? (
@@ -270,18 +388,30 @@ export default function Monitoring() {
                   Activity logs will appear as the election progresses.
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1" data-testid="monitoring-activity">
+                <div
+                  className="space-y-3 max-h-[420px] overflow-y-auto pr-1"
+                  data-testid="monitoring-activity"
+                >
                   {activities.slice(0, 8).map((activity) => (
-                    <div key={activity.id} className="border border-border rounded-lg p-3">
+                    <div
+                      key={activity.id}
+                      className="border border-border rounded-lg p-3"
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-sm font-medium text-foreground">{activity.description}</p>
+                          <p className="text-sm font-medium text-foreground">
+                            {activity.description}
+                          </p>
                           <p className="text-xs text-muted-foreground">
-                            {activity.type.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase())}
+                            {activity.type
+                              .replace(/_/g, " ")
+                              .replace(/\b\w/g, (char) => char.toUpperCase())}
                           </p>
                         </div>
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
-                          {formatDistanceToNow(new Date(activity.timestamp!), { addSuffix: true })}
+                          {formatDistanceToNow(new Date(activity.timestamp!), {
+                            addSuffix: true,
+                          })}
                         </span>
                       </div>
                     </div>

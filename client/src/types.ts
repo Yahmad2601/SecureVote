@@ -26,4 +26,6 @@ export interface VoteLog {
   deviceLocation?: string | null;
   timestamp: string;
   verified: boolean;
+  confidence?: number; // ADD THIS
+  signalStrength?: number; // ADD THIS
 }

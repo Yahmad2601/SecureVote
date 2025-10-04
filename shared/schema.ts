@@ -1,10 +1,21 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, decimal, jsonb } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  varchar,
+  timestamp,
+  integer,
+  boolean,
+  decimal,
+  jsonb,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   role: text("role").notNull().default("observer"), // super_admin, election_officer, observer
@@ -13,7 +24,9 @@ export const users = pgTable("users", {
 });
 
 export const voters = pgTable("voters", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   voterId: text("voter_id").notNull().unique(),
   fullName: text("full_name").notNull(),
   fingerprintHash: text("fingerprint_hash").notNull(),
@@ -22,7 +35,9 @@ export const voters = pgTable("voters", {
 });
 
 export const candidates = pgTable("candidates", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   party: text("party").notNull(),
   position: integer("position").notNull(),
@@ -30,7 +45,9 @@ export const candidates = pgTable("candidates", {
 });
 
 export const devices = pgTable("devices", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   deviceId: text("device_id").notNull().unique(),
   name: text("name").notNull(),
   status: text("status").notNull().default("offline"), // online, offline, warning
@@ -41,17 +58,24 @@ export const devices = pgTable("devices", {
 });
 
 export const votes = pgTable("votes", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   voterId: text("voter_id").notNull(),
   candidateId: varchar("candidate_id").references(() => candidates.id),
   deviceId: varchar("device_id").references(() => devices.id),
   fingerprintHash: text("fingerprint_hash").notNull(),
   timestamp: timestamp("timestamp").defaultNow(),
   verified: boolean("verified").default(true),
+  // NEW FIELDS FOR ESP32
+  confidence: integer("confidence"), // Fingerprint confidence score (0-255)
+  signalStrength: integer("signal_strength"), // WiFi RSSI value
 });
 
 export const securityLogs = pgTable("security_logs", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   type: text("type").notNull(), // duplicate_attempt, unregistered_fingerprint, device_tampering, login_attempt
   severity: text("severity").notNull().default("medium"), // low, medium, high, critical
   deviceId: varchar("device_id").references(() => devices.id),
@@ -63,7 +87,9 @@ export const securityLogs = pgTable("security_logs", {
 });
 
 export const activityLogs = pgTable("activity_logs", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   type: text("type").notNull(), // vote_cast, voter_registered, device_sync, user_login
   description: text("description").notNull(),
   userId: varchar("user_id").references(() => users.id),
@@ -93,11 +119,16 @@ export const insertDeviceSchema = createInsertSchema(devices).omit({
   lastSync: true,
 });
 
-export const insertVoteSchema = createInsertSchema(votes).omit({
-  id: true,
-  timestamp: true,
-  verified: true,
-});
+export const insertVoteSchema = createInsertSchema(votes)
+  .omit({
+    id: true,
+    verified: true,
+  })
+  .extend({
+    confidence: z.number().min(0).max(255).optional(),
+    signalStrength: z.number().optional(),
+    timestamp: z.union([z.date(), z.number()]).optional(), // Allow Unix timestamp
+  });
 
 export const insertSecurityLogSchema = createInsertSchema(securityLogs).omit({
   id: true,

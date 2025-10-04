@@ -67,7 +67,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const voteData = insertVoteSchema.parse(req.body);
 
-      // Check if voter exists and hasn't voted
+      // Convert Unix timestamp to Date if provided
+      let voteTimestamp = new Date();
+      if (voteData.timestamp) {
+        if (typeof voteData.timestamp === "number") {
+          voteTimestamp = new Date(voteData.timestamp * 1000);
+        } else {
+          voteTimestamp = voteData.timestamp;
+        }
+      }
+
+      // Check if voter exists
       const voter = await storage.getVoterByVoterId(voteData.voterId);
       if (!voter) {
         await storage.createSecurityLog({
@@ -76,10 +86,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           deviceId: voteData.deviceId || undefined,
           voterId: voteData.voterId,
           description: `Unregistered voter ID ${voteData.voterId} attempted to vote`,
+          metadata: {
+            confidence: voteData.confidence,
+            signalStrength: voteData.signalStrength,
+          },
         });
-        return res.status(400).json({ message: "Voter not registered" });
+        return res.status(400).json({
+          message: "Voter not registered",
+          success: false,
+        });
       }
 
+      // Check if voter has already voted
       if (voter.hasVoted) {
         await storage.createSecurityLog({
           type: "duplicate_attempt",
@@ -87,8 +105,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           deviceId: voteData.deviceId || undefined,
           voterId: voteData.voterId,
           description: `Duplicate vote attempt by voter ${voteData.voterId}`,
+          metadata: {
+            confidence: voteData.confidence,
+            signalStrength: voteData.signalStrength,
+          },
         });
-        return res.status(400).json({ message: "Voter has already voted" });
+        return res.status(400).json({
+          message: "Voter has already voted",
+          success: false,
+          hasVoted: true,
+        });
       }
 
       // Verify fingerprint hash
@@ -99,46 +125,240 @@ export async function registerRoutes(app: Express): Promise<Server> {
           deviceId: voteData.deviceId || undefined,
           voterId: voteData.voterId,
           description: `Fingerprint mismatch for voter ${voteData.voterId}`,
+          metadata: {
+            confidence: voteData.confidence,
+            expectedHash: voter.fingerprintHash.substring(0, 8) + "...",
+            receivedHash: voteData.fingerprintHash.substring(0, 8) + "...",
+          },
         });
-        return res
-          .status(400)
-          .json({ message: "Fingerprint verification failed" });
+        return res.status(400).json({
+          message: "Fingerprint verification failed",
+          success: false,
+        });
+      }
+
+      // Check confidence threshold (if provided)
+      if (voteData.confidence && voteData.confidence < 50) {
+        await storage.createSecurityLog({
+          type: "low_confidence",
+          severity: "medium",
+          deviceId: voteData.deviceId || undefined,
+          voterId: voteData.voterId,
+          description: `Low fingerprint confidence: ${voteData.confidence}`,
+          metadata: { confidence: voteData.confidence },
+        });
+        return res.status(400).json({
+          message: "Fingerprint confidence too low",
+          success: false,
+          confidence: voteData.confidence,
+        });
       }
 
       const device = voteData.deviceId
         ? await storage.getDevice(voteData.deviceId)
         : undefined;
 
-      // Create vote with normalized device identifier when available
+      // Find candidate by name (ESP32 sends candidate name, not ID)
+      let candidateId = voteData.candidateId;
+      if (
+        typeof voteData.candidateId === "string" &&
+        !voteData.candidateId.includes("-")
+      ) {
+        // It's a candidate name, find the ID
+        const candidates = await storage.getCandidates();
+        const candidate = candidates.find(
+          (c) => c.name === voteData.candidateId
+        );
+        if (candidate) {
+          candidateId = candidate.id;
+        }
+      }
+
+      // Create vote with all metadata
       const vote = await storage.createVote({
         ...voteData,
+        candidateId,
         deviceId: device?.id ?? voteData.deviceId ?? undefined,
+        timestamp: voteTimestamp,
+        confidence: voteData.confidence,
+        signalStrength: voteData.signalStrength,
       });
 
       // Update voter status
       await storage.updateVoterVoteStatus(voteData.voterId, true);
 
-      // Update device sync using physical device identifier when available
+      // Update device sync
       if (device) {
         await storage.updateDeviceSync(device.deviceId);
       } else if (voteData.deviceId) {
         await storage.updateDeviceSync(voteData.deviceId);
       }
 
-      // Log activity
+      // Log activity with metadata
       await storage.createActivityLog({
         type: "vote_cast",
-        description: `Vote cast by voter ${voteData.voterId.slice(0, 3)}***`,
+        description: `Vote cast by voter ${voteData.voterId.slice(
+          0,
+          3
+        )}*** with confidence ${voteData.confidence || "N/A"}`,
         deviceId: device?.id,
         metadata: {
           maskedVoterId: voteData.voterId.slice(0, 3) + "***",
           deviceIdentifier: device?.deviceId ?? voteData.deviceId ?? null,
+          confidence: voteData.confidence,
+          signalStrength: voteData.signalStrength,
+          timestamp: voteTimestamp.toISOString(),
         },
       });
 
-      res.json({ success: true, voteId: vote.id });
+      res.json({
+        success: true,
+        voteId: vote.id,
+        message: "Vote submitted successfully",
+      });
     } catch (error) {
-      res.status(500).json({ message: "Failed to submit vote" });
+      console.error("Vote submission error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({
+        message: "Failed to submit vote",
+        success: false,
+        error: message,
+      });
+    }
+  });
+
+  // Offline vote sync endpoint
+  app.post("/api/esp32/sync-offline-votes", async (req, res) => {
+    try {
+      const { votes: offlineVotes, deviceId } = req.body;
+
+      if (!Array.isArray(offlineVotes) || offlineVotes.length === 0) {
+        return res.status(400).json({
+          message: "No offline votes to sync",
+          success: false,
+        });
+      }
+
+      const results = {
+        total: offlineVotes.length,
+        successful: 0,
+        failed: 0,
+        errors: [] as { voterId: string; reason: string }[],
+      };
+
+      for (const voteData of offlineVotes) {
+        try {
+          // Validate and process each vote
+          const validatedVote = insertVoteSchema.parse(voteData);
+
+          // Check if already submitted (by timestamp or voter ID)
+          const existingVote = await storage.getVoterByVoterId(
+            validatedVote.voterId
+          );
+          if (existingVote && existingVote.hasVoted) {
+            results.failed++;
+            results.errors.push({
+              voterId: validatedVote.voterId,
+              reason: "Already voted",
+            });
+            continue;
+          }
+
+          // Submit the vote (reuse existing logic)
+          await storage.createVote({
+            ...validatedVote,
+            timestamp:
+              typeof validatedVote.timestamp === "number"
+                ? new Date(validatedVote.timestamp * 1000)
+                : new Date(),
+          });
+
+          await storage.updateVoterVoteStatus(validatedVote.voterId, true);
+          results.successful++;
+        } catch (error) {
+          results.failed++;
+          results.errors.push({
+            voterId: voteData.voterId || "unknown",
+            reason: error instanceof Error ? error.message : "Unknown error",
+          });
+        }
+      }
+
+      await storage.createActivityLog({
+        type: "device_sync",
+        description: `Synced ${results.successful} offline votes from device ${deviceId}`,
+        metadata: {
+          deviceId,
+          total: results.total,
+          successful: results.successful,
+          failed: results.failed,
+        },
+      });
+
+      res.json({
+        success: true,
+        results,
+        message: `Synced ${results.successful}/${results.total} offline votes`,
+      });
+    } catch (error) {
+      console.error("Offline vote sync error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({
+        message: "Failed to sync offline votes",
+        success: false,
+        error: message,
+      });
+    }
+  });
+
+  // Device health check endpoint
+  app.post("/api/esp32/health/:deviceId", async (req, res) => {
+    try {
+      const { deviceId } = req.params;
+      const { batteryLevel, signalStrength, freeMemory } = req.body;
+
+      const device = await storage.getDevice(deviceId);
+      if (!device) {
+        return res.status(404).json({
+          message: "Device not found",
+          success: false,
+        });
+      }
+
+      // Update device status based on battery level
+      let status = "online";
+      if (batteryLevel < 15) {
+        status = "warning";
+      } else if (batteryLevel === 0) {
+        status = "offline";
+      }
+
+      await storage.updateDeviceStatus(deviceId, status, batteryLevel);
+
+      // Log health check
+      await storage.createActivityLog({
+        type: "device_sync",
+        description: `Health check from device ${deviceId}`,
+        deviceId: device.id,
+        metadata: {
+          batteryLevel,
+          signalStrength,
+          freeMemory,
+          status,
+        },
+      });
+
+      res.json({
+        success: true,
+        status,
+        message: "Health check recorded",
+      });
+    } catch (error) {
+      console.error("Health check error:", error);
+      res.status(500).json({
+        message: "Failed to record health check",
+        success: false,
+      });
     }
   });
 
@@ -195,6 +415,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ? new Date(vote.timestamp).toISOString()
             : new Date().toISOString(),
           verified: vote.verified ?? false,
+          confidence: vote.confidence, // ADD THIS
+          signalStrength: vote.signalStrength, // ADD THIS
         };
       });
 
