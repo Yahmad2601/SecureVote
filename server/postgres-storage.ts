@@ -36,6 +36,15 @@ export class PostgreSQLStorage implements IStorage {
     return result[0];
   }
 
+  async setDevicesOfflineIfStale(offlineThreshold: Date): Promise<void> {
+    await db
+      .update(devices)
+      .set({ status: "offline" })
+      .where(
+        sql`${devices.lastSync} < ${offlineThreshold} AND ${devices.status} != 'offline'`
+      );
+  }
+
   async getUserByUsername(username: string): Promise<User | undefined> {
     const result = await db
       .select()
@@ -150,7 +159,15 @@ export class PostgreSQLStorage implements IStorage {
   }
 
   async createVote(vote: InsertVote): Promise<Vote> {
-    const result = await db.insert(votes).values(vote).returning();
+    // Ensure timestamp is a Date object
+    const fixedVote = {
+      ...vote,
+      timestamp:
+        typeof vote.timestamp === "number"
+          ? new Date(vote.timestamp * 1000)
+          : vote.timestamp ?? new Date(),
+    };
+    const result = await db.insert(votes).values(fixedVote).returning();
     return result[0];
   }
 
