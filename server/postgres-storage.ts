@@ -159,7 +159,7 @@ export class PostgreSQLStorage implements IStorage {
   }
 
   async createVote(vote: InsertVote): Promise<Vote> {
-    // Ensure timestamp is a Date object
+    // Map camelCase to snake_case if needed
     const fixedVote = {
       ...vote,
       timestamp:
