@@ -283,6 +283,8 @@ export class MemStorage implements IStorage {
     return Array.from(this.votes.values());
   }
 
+  // File: server/storage.ts or where your function is located
+
   async createVote(insertVote: InsertVote): Promise<Vote> {
     const id = randomUUID();
     const vote: Vote = {
@@ -292,6 +294,9 @@ export class MemStorage implements IStorage {
       candidateId: insertVote.candidateId || null,
       timestamp: new Date(),
       verified: true,
+      // FIX: Explicitly set confidence and signalStrength to null if they are not provided.
+      confidence: insertVote.confidence ?? null,
+      signalStrength: insertVote.signalStrength ?? null,
     };
     this.votes.set(id, vote);
     return vote;
