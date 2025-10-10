@@ -65,8 +65,8 @@ export const votes = pgTable("votes", {
   candidateId: varchar("candidate_id").references(() => candidates.id),
   deviceId: varchar("device_id").references(() => devices.id),
   fingerprintHash: text("fingerprint_hash").notNull(),
-  timestamp: timestamp("timestamp").defaultNow(),
-  verified: boolean("verified").default(true),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  verified: boolean("verified").default(true).notNull(),
   // NEW FIELDS FOR ESP32
   confidence: integer("confidence"), // Fingerprint confidence score (0-255)
   signalStrength: integer("signal_strength"), // WiFi RSSI value
