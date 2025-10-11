@@ -385,11 +385,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           fingerprint_hash: v.fingerprintHash,
           has_voted: v.hasVoted,
         })),
-        candidates: candidates.map((c, index) => ({
-          position: index + 1,
-          name: c.name,
-          party: c.party, // Send party information
-        })),
+        candidates: candidates.map((c) => c.name),
       };
 
       res.json(syncData);
